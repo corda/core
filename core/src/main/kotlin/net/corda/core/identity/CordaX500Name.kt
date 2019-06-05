@@ -6,7 +6,9 @@ import net.corda.core.internal.toAttributesMap
 import net.corda.core.internal.toX500Name
 import net.corda.core.internal.unspecifiedCountry
 import net.corda.core.serialization.CordaSerializable
+import org.bouncycastle.asn1.ASN1Encodable
 import org.bouncycastle.asn1.x500.style.BCStyle
+import org.bouncycastle.asn1.x500.style.IETFUtils
 import java.util.*
 import javax.security.auth.x500.X500Principal
 
@@ -83,13 +85,21 @@ data class CordaX500Name(val commonName: String?,
         @JvmStatic
         fun build(principal: X500Principal): CordaX500Name {
             val attrsMap = principal.toAttributesMap(supportedAttributes)
-            val CN = attrsMap[BCStyle.CN]?.toString()
-            val OU = attrsMap[BCStyle.OU]?.toString()
-            val O = requireNotNull(attrsMap[BCStyle.O]?.toString()) { "Corda X.500 names must include an O attribute" }
-            val L = requireNotNull(attrsMap[BCStyle.L]?.toString()) { "Corda X.500 names must include an L attribute" }
-            val ST = attrsMap[BCStyle.ST]?.toString()
-            val C = requireNotNull(attrsMap[BCStyle.C]?.toString()) { "Corda X.500 names must include an C attribute" }
+            val CN = toRFC1779String(attrsMap[BCStyle.CN])
+            val OU = toRFC1779String(attrsMap[BCStyle.OU])
+            val O = requireNotNull(toRFC1779String(attrsMap[BCStyle.O])) { "Corda X.500 names must include an O attribute" }
+            val L = requireNotNull(toRFC1779String(attrsMap[BCStyle.L])) { "Corda X.500 names must include an L attribute" }
+            val ST = toRFC1779String(attrsMap[BCStyle.ST])
+            val C = requireNotNull(toRFC1779String(attrsMap[BCStyle.C])) { "Corda X.500 names must include an C attribute" }
             return CordaX500Name(CN, OU, O, L, ST, C)
+        }
+
+        /*
+         * use RFC1779 String representation based on encoded values and not default toString()
+         */
+        @JvmStatic
+        private fun toRFC1779String(rdnsValue: ASN1Encodable?): String? {
+            return if (rdnsValue != null) IETFUtils.valueToString(rdnsValue) else null
         }
 
         @JvmStatic

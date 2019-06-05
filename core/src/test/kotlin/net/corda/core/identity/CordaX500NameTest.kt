@@ -4,6 +4,7 @@ import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 
 import java.lang.Character.MIN_VALUE as NULLCHAR
 
@@ -153,6 +154,26 @@ class CordaX500NameTest {
         }
         checkLocalityAndOrganisationalUnitAndCommonNameReject("IN\\VALID")
     }
+
+    // checkout quote tests from https://tools.ietf.org/html/rfc1779#page-4
+    @Test
+    fun `accepts names with quoted , (comma) `() {
+        CordaX500Name.parse("O=Sue\\, Grabbit and Runn, L=VALID, C=CH")
+        validateLocalityAndOrganisationalUnitAndCommonName("\"Sue, Grabbit and Runn\"")
+    }
+    // checkout quote tests from https://tools.ietf.org/html/rfc1779#page-4
+    @Test
+    fun `accepts names with double quotes`() {
+        CordaX500Name.parse("O=\"Sue, Grabbit and Runn\", L=VALID, C=CH")
+        validateLocalityAndOrganisationalUnitAndCommonName("\"Sue, Grabbit and Runn\"")
+    }
+
+    @Test
+    fun `validate special format for quoted , `() {
+        val cordaX500Name = CordaX500Name.parse("O=\"Sue, Grabbit and Runn\", L=VALID, C=CH")
+        assertEquals(cordaX500Name.organisation, "Sue\\, Grabbit and Runn", "Quoted string with , replaced with quoted \\,")
+    }
+
 
     @Test
     fun `rejects double spacing only in the organisation attribute`() {
