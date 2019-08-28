@@ -46,7 +46,7 @@ of steps that tells a node how to achieve a specific ledger update, such as issu
 
 Here is the sequence of flow steps involved in the simple ledger update above:
 
-.. image:: resources/flow-sequence.png
+.. image:: resources/flow-sequence-notary.png
    :scale: 25%
    :align: center
 
