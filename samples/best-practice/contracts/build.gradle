@@ -1,0 +1,30 @@
+apply plugin: 'kotlin'
+apply plugin: 'idea'
+apply plugin: 'net.corda.plugins.cordapp'
+
+cordapp {
+    targetPlatformVersion = corda_platform_version.toInteger()
+    minimumPlatformVersion 4
+    signing {
+        enabled true
+    }
+    sealing {
+        enabled true
+    }
+    contract {
+        name "net/corda/sample/best-practice/contracts"
+        versionId 1
+        vendor "R3"
+        licence "Open Source (Apache 2)"
+    }
+}
+
+
+dependencies {
+    cordaCompile "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
+
+    cordapp project(':finance:contracts')
+
+    // Corda integration dependencies
+    cordaCompile project(':core')
+}

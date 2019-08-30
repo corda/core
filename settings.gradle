@@ -76,6 +76,7 @@ include 'samples:bank-of-corda-demo'
 include 'samples:cordapp-configuration:workflows'
 include 'samples:network-verifier:contracts'
 include 'samples:network-verifier:workflows'
+include 'samples:best-practice:contracts'
 include 'serialization'
 
 // Common libraries - start
