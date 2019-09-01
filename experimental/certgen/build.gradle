@@ -1,0 +1,32 @@
+apply plugin: 'java'
+apply plugin: 'kotlin'
+
+description 'Certificate generation tool for a test Corda network'
+
+dependencies {
+    compile project(':tools:cliutils')
+    compile "org.slf4j:jul-to-slf4j:$slf4j_version"
+    compile "org.apache.logging.log4j:log4j-slf4j-impl:$log4j_version"
+    compile "com.jcabi:jcabi-manifests:$jcabi_manifests_version"
+    compile project(':core')
+    compile project(':node-api')
+}
+
+jar {
+    from(configurations.compile.collect { it.isDirectory() ? it : zipTree(it) }) {
+        exclude "META-INF/*.SF"
+        exclude "META-INF/*.DSA"
+        exclude "META-INF/*.RSA"
+    }
+    baseName = "certgen"
+    manifest {
+        attributes(
+                'Main-Class': 'net.corda.certgen.CertGenKt'
+        )
+    }
+}
+
+processResources {
+    from file("$rootDir/config/dev/log4j2.xml")
+//    from file("$rootDir/node-api/src/main/resources/certificates/cordadevcakeys.jks")
+}
