@@ -40,7 +40,7 @@ class CashSelectionSQLServerImpl : AbstractCashSelection() {
     //
     //      Common Table Expression and Windowed functions help make the query more readable.
     //      Query plan does index scan on pennies_idx, which may be unavoidable due to the nature of the query.
-    override fun executeQuery(connection: Connection, amount: Amount<Currency>, lockId: UUID, notary: Party?, onlyFromIssuerParties: Set<AbstractParty>, withIssuerRefs: Set<OpaqueBytes>, withResultSet: (ResultSet) -> Boolean): Boolean {
+    override fun executeQuery(connection: Connection, amount: Amount<Currency>, lockId: UUID, notary: Party?, onlyFromIssuerParties: Set<AbstractParty>, withIssuerRefs: Set<OpaqueBytes>, maxVersion: Int, withResultSet: (ResultSet) -> Boolean): Boolean {
         val sb = StringBuilder()
         // state_status = 0 -> UNCONSUMED.
         // is_relevant = 0 -> RELEVANT.

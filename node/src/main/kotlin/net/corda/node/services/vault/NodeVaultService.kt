@@ -158,7 +158,8 @@ class NodeVaultService(
                     recordedTime = clock.instant(),
                     relevancyStatus = if (isRelevant) Vault.RelevancyStatus.RELEVANT else Vault.RelevancyStatus.NOT_RELEVANT,
                     constraintType = constraintInfo.type(),
-                    constraintData = constraintInfo.data()
+                    constraintData = constraintInfo.data(),
+                    txVersion = stateAndRef.key.txVersion
             )
             stateToAdd.stateRef = persistentStateRef
             session.save(stateToAdd)
@@ -200,7 +201,6 @@ class NodeVaultService(
                     }
                 }
             }
-
         }
         return update
     }
@@ -212,7 +212,8 @@ class NodeVaultService(
         get() = mutex.locked { _updatesInDbTx }
 
     @VisibleForTesting
-    internal val publishUpdates get() = mutex.locked { updatesPublisher }
+    internal val publishUpdates
+        get() = mutex.locked { updatesPublisher }
 
     /** Groups adjacent transactions into batches to generate separate net updates per transaction type. */
     override fun notifyAll(statesToRecord: StatesToRecord, txns: Iterable<CoreTransaction>, previouslySeenTxns: Iterable<CoreTransaction>) {
@@ -279,7 +280,7 @@ class NodeVaultService(
                 } else {
                     outputs
                 }
-            }.map { (idx, _) -> tx.outRef<ContractState>(idx) }
+            }.map { (idx, _) -> tx.outRef<ContractState>(idx).let { it.copy(ref = it.ref.copy(txVersion = tx.txVersion)) } }
 
             // Retrieve all unconsumed states for this transaction's inputs.
             val consumedStates = loadStates(tx.inputs)
@@ -642,7 +643,7 @@ class NodeVaultService(
                             if (!paging.isDefault && index == paging.pageSize) // skip last result if paged
                                 return@forEachIndexed
                             val vaultState = result[0] as VaultSchemaV1.VaultStates
-                            val stateRef = StateRef(SecureHash.parse(vaultState.stateRef!!.txId), vaultState.stateRef!!.index)
+                            val stateRef = StateRef(SecureHash.parse(vaultState.stateRef!!.txId), vaultState.stateRef!!.index, vaultState.txVersion?:0)
                             stateRefs.add(stateRef)
                             statesMeta.add(Vault.StateMetadata(stateRef,
                                     vaultState.contractStateClassName,
@@ -721,7 +722,7 @@ class NodeVaultService(
      *       partial exclusion, we decide to return some more updates, instead of losing them completely (not returning them either in
      *       the snapshot or in the observable).
      */
-    private fun <T: ContractState> hasBeenSeen(update: Vault.Update<T>, snapshotStatesRefs: Set<StateRef>, snapshotConsumedStatesRefs: Set<StateRef>): Boolean {
+    private fun <T : ContractState> hasBeenSeen(update: Vault.Update<T>, snapshotStatesRefs: Set<StateRef>, snapshotConsumedStatesRefs: Set<StateRef>): Boolean {
         val updateProducedStatesRefs = update.produced.map { it.ref }.toSet()
         val updateConsumedStatesRefs = update.consumed.map { it.ref }.toSet()
 
@@ -764,7 +765,7 @@ class NodeVaultService(
     }
 
     private fun <T : ContractState> deriveContractTypes(clazz: Class<T>): Set<Class<T>> {
-        val myTypes : MutableSet<Class<T>> = mutableSetOf()
+        val myTypes: MutableSet<Class<T>> = mutableSetOf()
         clazz.superclass?.let {
             if (!it.isInstance(Any::class)) {
                 myTypes.add(uncheckedCast(it))

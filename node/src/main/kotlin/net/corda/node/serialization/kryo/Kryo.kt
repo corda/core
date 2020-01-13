@@ -209,12 +209,14 @@ object WireTransactionSerializer : Serializer<WireTransaction>() {
     override fun write(kryo: Kryo, output: Output, obj: WireTransaction) {
         kryo.writeClassAndObject(output, obj.componentGroups)
         kryo.writeClassAndObject(output, obj.privacySalt)
+        kryo.writeClassAndObject(output, obj.txVersion)
     }
 
     override fun read(kryo: Kryo, input: Input, type: Class<WireTransaction>): WireTransaction {
         val componentGroups: List<ComponentGroup> = uncheckedCast(kryo.readClassAndObject(input))
         val privacySalt = kryo.readClassAndObject(input) as PrivacySalt
-        return WireTransaction(componentGroups, privacySalt)
+        val txVersion = kryo.readClassAndObject(input) as Int
+        return WireTransaction(componentGroups, privacySalt, txVersion)
     }
 }
 

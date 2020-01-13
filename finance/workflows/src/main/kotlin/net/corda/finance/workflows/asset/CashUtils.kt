@@ -78,8 +78,9 @@ object CashUtils {
                       ourIdentity: PartyAndCertificate,
                       to: AbstractParty,
                       onlyFromParties: Set<AbstractParty> = emptySet(),
-                      anonymous: Boolean = true): Pair<TransactionBuilder, List<PublicKey>> {
-        return generateSpend(services, tx, listOf(PartyAndAmount(to, amount)), ourIdentity, onlyFromParties, anonymous)
+                      anonymous: Boolean = true,
+                      maxVersion: Int = 0): Pair<TransactionBuilder, List<PublicKey>> {
+        return generateSpend(services, tx, listOf(PartyAndAmount(to, amount)), ourIdentity, onlyFromParties, anonymous, maxVersion)
     }
 
     /**
@@ -141,7 +142,9 @@ object CashUtils {
                       payments: List<PartyAndAmount<Currency>>,
                       ourIdentity: PartyAndCertificate,
                       onlyFromParties: Set<AbstractParty> = emptySet(),
-                      anonymous: Boolean = true): Pair<TransactionBuilder, List<PublicKey>> {
+                      anonymous: Boolean = true,
+                      maxVersion: Int = 0): Pair<TransactionBuilder, List<PublicKey>> {
+
         fun deriveState(txState: TransactionState<Cash.State>, amt: Amount<Issued<Currency>>, owner: AbstractParty): TransactionState<Cash.State> {
             return txState.copy(data = txState.data.copy(amount = amt, owner = owner))
         }
@@ -149,7 +152,7 @@ object CashUtils {
         // Retrieve unspent and unlocked cash states that meet our spending criteria.
         val totalAmount = payments.map { it.amount }.sumOrThrow()
         val cashSelection = AbstractCashSelection.getInstance { services.jdbcSession().metaData }
-        val acceptableCoins = cashSelection.unconsumedCashStatesForSpending(services, totalAmount, onlyFromParties, tx.notary, tx.lockId)
+        val acceptableCoins = cashSelection.unconsumedCashStatesForSpending(services, totalAmount, onlyFromParties, tx.notary, tx.lockId, maxVersion = maxVersion)
         val revocationEnabled = false // Revocation is currently unsupported
         // If anonymous is true, generate a new identity that change will be sent to for confidentiality purposes. This means that a
         // third party with a copy of the transaction (such as the notary) cannot identify who the change was

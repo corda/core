@@ -79,7 +79,8 @@ class NetworkParametersResolutionTest {
                         wtx.timeWindow,
                         wtx.references,
                         parameters?.serialize()?.hash),
-                wtx.privacySalt
+                wtx.privacySalt,
+                0
         )
         val publicKey = services.myInfo.singleIdentity().owningKey
         val signatureMetadata = SignatureMetadata(services.myInfo.platformVersion, Crypto.findSignatureScheme(publicKey).schemeNumberID)

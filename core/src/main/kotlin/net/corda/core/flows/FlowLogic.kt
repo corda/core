@@ -125,7 +125,7 @@ abstract class FlowLogic<out T> {
     fun initiateFlow(destination: Destination): FlowSession {
         require(destination is Party || destination is AnonymousParty) { "Unsupported destination type ${destination.javaClass.name}" }
         return stateMachine.initiateFlow(destination, serviceHub.identityService.wellKnownPartyFromAnonymous(destination as AbstractParty)
-            ?: throw IllegalArgumentException("Could not resolve destination: $destination"))
+                ?: throw IllegalArgumentException("Could not resolve destination: $destination"))
     }
 
     /**
@@ -502,6 +502,17 @@ abstract class FlowLogic<out T> {
 
     private fun <R> castMapValuesToKnownType(map: Map<FlowSession, UntrustworthyData<Any>>): List<UntrustworthyData<R>> {
         return map.values.map { uncheckedCast<Any, UntrustworthyData<R>>(it) }
+    }
+
+    fun getMinimumCommonVersion(parties: List<AbstractParty>): Int {
+        val versions = parties.mapNotNull { serviceHub.networkMapCache.getNodeByLegalIdentity(it) }.map { nodeInfo ->
+            if (nodeInfo.legalIdentities.first().name.organisationUnit?.contains("V5") == true) {
+                5
+            } else {
+                4
+            }
+        }
+        return versions.min() ?: 4
     }
 }
 

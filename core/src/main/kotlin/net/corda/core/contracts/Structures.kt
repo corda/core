@@ -1,5 +1,6 @@
 @file:JvmName("Structures")
 @file:KeepForDJVM
+
 package net.corda.core.contracts
 
 import net.corda.core.DeleteForDJVM
@@ -160,7 +161,7 @@ fun ContractState.hash(): SecureHash = SecureHash.sha256(serialize().bytes)
 @KeepForDJVM
 @CordaSerializable
 // DOCSTART 8
-data class StateRef(val txhash: SecureHash, val index: Int) {
+data class StateRef(val txhash: SecureHash, val index: Int, val txVersion: Int = 0) {
     override fun toString() = "$txhash($index)"
 }
 // DOCEND 8
@@ -177,6 +178,9 @@ data class StateAndRef<out T : ContractState>(val state: TransactionState<T>, va
 
 /** A wrapper for a [StateAndRef] indicating that it should be added to a transaction as a reference input state. */
 data class ReferencedStateAndRef<out T : ContractState>(val stateAndRef: StateAndRef<T>)
+
+/** A wrapper for a [StateAndRef] indicating that it should be added to a transaction as a reference input state. */
+data class SuperStateAndRef<out T : ContractState>(val stateAndRef: StateAndRef<T>)
 
 /** Filters a list of [StateAndRef] objects according to the type of the states */
 inline fun <reified T : ContractState> Iterable<StateAndRef<ContractState>>.filterStatesOfType(): List<StateAndRef<T>> {
@@ -290,6 +294,7 @@ interface UpgradedContract<in OldState : ContractState, out NewState : ContractS
      * Name of the contract this is an upgraded version of, used as part of verification of upgrade transactions.
      */
     val legacyContract: ContractClassName
+
     /**
      * Upgrade contract's state object to a new state object.
      *

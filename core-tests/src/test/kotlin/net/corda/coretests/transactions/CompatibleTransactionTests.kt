@@ -67,16 +67,16 @@ class CompatibleTransactionTests {
                 signersGroup
         )
     }
-    private val wireTransactionA by lazy { WireTransaction(componentGroups = componentGroupsA, privacySalt = privacySalt) }
+    private val wireTransactionA by lazy { WireTransaction(componentGroups = componentGroupsA, privacySalt = privacySalt, txVersion = 0) }
 
     @Test
     fun `Merkle root computations`() {
         // Merkle tree computation is deterministic if the same salt and ordering are used.
-        val wireTransactionB = WireTransaction(componentGroups = componentGroupsA, privacySalt = privacySalt)
+        val wireTransactionB = WireTransaction(componentGroups = componentGroupsA, privacySalt = privacySalt, txVersion = 0)
         assertEquals(wireTransactionA, wireTransactionB)
 
         // Merkle tree computation will change if privacy salt changes.
-        val wireTransactionOtherPrivacySalt = WireTransaction(componentGroups = componentGroupsA, privacySalt = PrivacySalt())
+        val wireTransactionOtherPrivacySalt = WireTransaction(componentGroups = componentGroupsA, privacySalt = PrivacySalt(), txVersion = 0)
         assertNotEquals(wireTransactionA, wireTransactionOtherPrivacySalt)
 
         // Full Merkle root is computed from the list of Merkle roots of each component group.
@@ -92,7 +92,7 @@ class CompatibleTransactionTests {
                 timeWindowGroup,
                 signersGroup
         )
-        assertFails { WireTransaction(componentGroups = componentGroupsEmptyAttachment, privacySalt = privacySalt) }
+        assertFails { WireTransaction(componentGroups = componentGroupsEmptyAttachment, privacySalt = privacySalt, txVersion = 0) }
 
         // Ordering inside a component group matters.
         val inputsShuffled = listOf(stateRef2, stateRef1, stateRef3)
@@ -105,7 +105,7 @@ class CompatibleTransactionTests {
                 timeWindowGroup,
                 signersGroup
         )
-        val wireTransaction1ShuffledInputs = WireTransaction(componentGroups = componentGroupsB, privacySalt = privacySalt)
+        val wireTransaction1ShuffledInputs = WireTransaction(componentGroups = componentGroupsB, privacySalt = privacySalt, txVersion = 0)
         // The ID has changed due to change of the internal ordering in inputs.
         assertNotEquals(wireTransaction1ShuffledInputs, wireTransactionA)
 
@@ -126,13 +126,13 @@ class CompatibleTransactionTests {
                 timeWindowGroup,
                 signersGroup
         )
-        assertEquals(wireTransactionA, WireTransaction(componentGroups = shuffledComponentGroupsA, privacySalt = privacySalt))
+        assertEquals(wireTransactionA, WireTransaction(componentGroups = shuffledComponentGroupsA, privacySalt = privacySalt, txVersion = 0))
     }
 
     @Test
     fun `WireTransaction constructors and compatibility`() {
         val groups = createComponentGroups(inputs, outputs, commands, attachments, notary, timeWindow, emptyList(), null)
-        val wireTransactionOldConstructor = WireTransaction(groups, privacySalt)
+        val wireTransactionOldConstructor = WireTransaction(groups, privacySalt, 0)
         assertEquals(wireTransactionA, wireTransactionOldConstructor)
 
         // Malformed tx - attachments is not List<SecureHash>. For this example, we mistakenly added input-state (StateRef) serialised objects with ATTACHMENTS_GROUP.ordinal.
@@ -145,7 +145,7 @@ class CompatibleTransactionTests {
                 timeWindowGroup,
                 signersGroup
         )
-        assertFails { WireTransaction(componentGroupsB, privacySalt).attachments.toList() }
+        assertFails { WireTransaction(componentGroupsB, privacySalt, 0).attachments.toList() }
 
         // Malformed tx - duplicated component group detected.
         val componentGroupsDuplicatedCommands = listOf(
@@ -157,7 +157,7 @@ class CompatibleTransactionTests {
                 timeWindowGroup,
                 signersGroup
         )
-        assertFails { WireTransaction(componentGroupsDuplicatedCommands, privacySalt) }
+        assertFails { WireTransaction(componentGroupsDuplicatedCommands, privacySalt, 0) }
 
         // Malformed tx - inputs is not a serialised object at all.
         val componentGroupsC = listOf(
@@ -168,7 +168,7 @@ class CompatibleTransactionTests {
                 timeWindowGroup,
                 signersGroup
         )
-        assertFails { WireTransaction(componentGroupsC, privacySalt) }
+        assertFails { WireTransaction(componentGroupsC, privacySalt, 0) }
 
         val componentGroupsCompatibleA = listOf(
                 inputGroup,
@@ -181,7 +181,7 @@ class CompatibleTransactionTests {
         )
 
         // The old client (receiving more component types than expected) is still compatible.
-        val wireTransactionCompatibleA = WireTransaction(componentGroupsCompatibleA, privacySalt)
+        val wireTransactionCompatibleA = WireTransaction(componentGroupsCompatibleA, privacySalt, 0)
         assertEquals(wireTransactionCompatibleA.availableComponentGroups, wireTransactionA.availableComponentGroups) // The known components are the same.
         assertNotEquals(wireTransactionCompatibleA, wireTransactionA) // But obviously, its Merkle root has changed Vs wireTransactionA (which doesn't include this extra component).
 
@@ -195,7 +195,7 @@ class CompatibleTransactionTests {
                 signersGroup,
                 newUnknownComponentEmptyGroup // A new unknown component with ordinal 101 that we cannot process.
         )
-        assertFails { WireTransaction(componentGroupsCompatibleEmptyNew, privacySalt) }
+        assertFails { WireTransaction(componentGroupsCompatibleEmptyNew, privacySalt, 0) }
     }
 
     @Test
@@ -258,7 +258,7 @@ class CompatibleTransactionTests {
                 signersGroup,
                 newUnknownComponentGroup // A new unknown component with ordinal 100 that we cannot process.
         )
-        val wireTransactionCompatibleA = WireTransaction(componentGroupsCompatibleA, privacySalt)
+        val wireTransactionCompatibleA = WireTransaction(componentGroupsCompatibleA, privacySalt, 0)
         val ftxCompatible = wireTransactionCompatibleA.buildFilteredTransaction(Predicate(::filtering))
         ftxCompatible.verify()
         assertEquals(ftxInputs.inputs, ftxCompatible.inputs)
@@ -308,7 +308,7 @@ class CompatibleTransactionTests {
                 ComponentGroup(SIGNERS_GROUP.ordinal, twoCommandsforKey1.map { it.signers.serialize() }),
                 newUnknownComponentGroup // A new unknown component with ordinal 100 that we cannot process.
         )
-        val wtx = WireTransaction(componentGroups = componentGroups, privacySalt = PrivacySalt())
+        val wtx = WireTransaction(componentGroups = componentGroups, privacySalt = PrivacySalt(), txVersion = 0)
 
         // Filter all commands.
         fun filterCommandsOnly(elem: Any): Boolean {
@@ -380,7 +380,7 @@ class CompatibleTransactionTests {
         )
 
         // Invalid Transaction. Sizes of CommandData and Signers (empty) do not match.
-        assertFailsWith<IllegalStateException> { WireTransaction(componentGroups = componentGroupsCompatible, privacySalt = PrivacySalt()) }
+        assertFailsWith<IllegalStateException> { WireTransaction(componentGroups = componentGroupsCompatible, privacySalt = PrivacySalt(), txVersion = 0) }
 
         // We send smaller list of signers.
         val componentGroupsLessSigners = listOf(
@@ -394,7 +394,7 @@ class CompatibleTransactionTests {
         )
 
         // Invalid Transaction. Sizes of CommandData and Signers (empty) do not match.
-        assertFailsWith<IllegalStateException> { WireTransaction(componentGroups = componentGroupsLessSigners, privacySalt = PrivacySalt()) }
+        assertFailsWith<IllegalStateException> { WireTransaction(componentGroups = componentGroupsLessSigners, privacySalt = PrivacySalt(), txVersion = 0) }
 
         // Test if there is no command to sign.
         val commandsNoKey1 = listOf(dummyCommand(DUMMY_KEY_2.public))
@@ -409,7 +409,7 @@ class CompatibleTransactionTests {
                 newUnknownComponentGroup // A new unknown component with ordinal 100 that we cannot process.
         )
 
-        val wtxNoKey1 = WireTransaction(componentGroups = componentGroupsNoKey1ToSign, privacySalt = PrivacySalt())
+        val wtxNoKey1 = WireTransaction(componentGroups = componentGroupsNoKey1ToSign, privacySalt = PrivacySalt(), txVersion = 0)
         val allCommandsNoKey1Ftx = wtxNoKey1.buildFilteredTransaction(Predicate(::filterCommandsOnly))
         allCommandsNoKey1Ftx.checkCommandVisibility(DUMMY_KEY_1.public) // This will pass, because there are indeed no commands to sign in the original transaction.
     }
@@ -429,7 +429,7 @@ class CompatibleTransactionTests {
                 timeWindowGroup,
                 ComponentGroup(SIGNERS_GROUP.ordinal, twoCommandsforKey1.map { it.signers.serialize() })
         )
-        val wtx = WireTransaction(componentGroups = componentGroups, privacySalt = PrivacySalt())
+        val wtx = WireTransaction(componentGroups = componentGroups, privacySalt = PrivacySalt(), txVersion = 0)
 
         // Filter KEY_1 commands (commands 1 and 3).
         fun filterKEY1Commands(elem: Any): Boolean {
@@ -572,7 +572,7 @@ class CompatibleTransactionTests {
                 signersGroup,
                 networkParamsGroup
         )
-        val wtx = WireTransaction(componentGroups, privacySalt)
+        val wtx = WireTransaction(componentGroups, privacySalt, 0)
         val ftx1 = wtx.buildFilteredTransaction(Predicate(::paramsFilter)) // Filter only network parameters hash.
         ftx1.verify()
         assertEquals(wtx.id, ftx1.id)

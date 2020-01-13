@@ -30,7 +30,7 @@ class CashSelectionPostgreSQLImpl : AbstractCashSelection() {
     //       2) The window function accumulated column (`total`) does not include the current row (starts from 0) and cannot
     //          appear in the WHERE clause, hence restricting row selection and adjusting the returned total in the outer query.
     //       3) Currently (version 9.6), FOR UPDATE cannot be specified with window functions
-    override fun executeQuery(connection: Connection, amount: Amount<Currency>, lockId: UUID, notary: Party?, onlyFromIssuerParties: Set<AbstractParty>, withIssuerRefs: Set<OpaqueBytes>, withResultSet: (ResultSet) -> Boolean): Boolean {
+    override fun executeQuery(connection: Connection, amount: Amount<Currency>, lockId: UUID, notary: Party?, onlyFromIssuerParties: Set<AbstractParty>, withIssuerRefs: Set<OpaqueBytes>, maxVersion: Int, withResultSet: (ResultSet) -> Boolean): Boolean {
         // state_status = 0 -> UNCONSUMED.
         // is_relevant = 0 -> RELEVANT.
         val selectJoin = """SELECT nested.transaction_id, nested.output_index, nested.pennies,

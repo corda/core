@@ -236,7 +236,7 @@ private class WireTransactionDeserializer : JsonDeserializer<WireTransaction>() 
                 wrapper.references,
                 wrapper.networkParametersHash
         )
-        return WireTransaction(componentGroups, wrapper.privacySalt)
+        return WireTransaction(componentGroups, wrapper.privacySalt, 0)
     }
 }
 

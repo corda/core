@@ -89,7 +89,10 @@ object VaultSchemaV1 : MappedSchema(
             /** associated constraint type data (if any) */
             @Column(name = "constraint_data", length = MAX_CONSTRAINT_DATA_SIZE, nullable = true)
             @Type(type = "corda-wrapper-binary")
-            var constraintData: ByteArray? = null
+            var constraintData: ByteArray? = null,
+
+            @Column(name = "tx_version", nullable = true)
+            var txVersion: Int? = null
     ) : PersistentState()
 
     @Entity

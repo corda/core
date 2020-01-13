@@ -27,22 +27,17 @@ import java.util.*
  * @param notary the notary to set on the output states.
  */
 @StartableByRPC
-class CashIssueFlow(private val amount: Amount<Currency>,
-                    private val issuerBankPartyRef: OpaqueBytes,
-                    private val notary: Party? = null,
-                    progressTracker: ProgressTracker) : AbstractCashFlow<AbstractCashFlow.Result>(progressTracker) {
-    constructor(amount: Amount<Currency>,
-                issuerBankPartyRef: OpaqueBytes,
-                notary: Party? = null) : this(amount, issuerBankPartyRef, notary, tracker())
-
-    constructor(request: IssueRequest) : this(request.amount, request.issueRef, request.notary, tracker())
+class CashIssueFlowV5(val amount: Amount<Currency>,
+                      val issuerBankPartyRef: OpaqueBytes,
+                      val notary: Party? = null) : AbstractCashFlow<AbstractCashFlow.Result>(tracker()) {
 
     @Suspendable
     override fun call(): AbstractCashFlow.Result {
         progressTracker.currentStep = GENERATING_TX
         val builder = TransactionBuilder(notary)
-        val issuer = ourIdentity.ref(issuerBankPartyRef)
-        val signers = Cash().generateIssue(builder, amount.issuedBy(issuer), ourIdentity, notary?:serviceHub.networkMapCache.notaryIdentities.first())
+        builder.addSuperState()
+        val signers = Cash().generateIssue(builder, amount.issuedBy(ourIdentity.ref(issuerBankPartyRef)), ourIdentity, notary
+                ?: serviceHub.networkMapCache.notaryIdentities.first())
         progressTracker.currentStep = SIGNING_TX
         val tx = serviceHub.signInitialTransaction(builder, signers)
         progressTracker.currentStep = FINALISING_TX
@@ -50,7 +45,4 @@ class CashIssueFlow(private val amount: Amount<Currency>,
         val notarised = finaliseTx(tx, emptySet(), "Unable to notarise issue")
         return Result(notarised, ourIdentity)
     }
-
-    @CordaSerializable
-    class IssueRequest(amount: Amount<Currency>, val issueRef: OpaqueBytes, val notary: Party) : AbstractRequest(amount)
 }

@@ -3,13 +3,48 @@ package net.corda.core.transactions
 import co.paralleluniverse.strands.Strand
 import net.corda.core.CordaInternal
 import net.corda.core.DeleteForDJVM
-import net.corda.core.contracts.*
+import net.corda.core.contracts.AlwaysAcceptAttachmentConstraint
+import net.corda.core.contracts.AttachmentConstraint
+import net.corda.core.contracts.AttachmentResolutionException
+import net.corda.core.contracts.AutomaticHashConstraint
+import net.corda.core.contracts.AutomaticPlaceholderConstraint
+import net.corda.core.contracts.Command
+import net.corda.core.contracts.CommandData
+import net.corda.core.contracts.ContractAttachment
+import net.corda.core.contracts.ContractClassName
+import net.corda.core.contracts.ContractState
+import net.corda.core.contracts.HashAttachmentConstraint
+import net.corda.core.contracts.NoConstraintPropagation
+import net.corda.core.contracts.PrivacySalt
+import net.corda.core.contracts.ReferencedStateAndRef
+import net.corda.core.contracts.SignatureAttachmentConstraint
+import net.corda.core.contracts.StateAndContract
+import net.corda.core.contracts.StateAndRef
+import net.corda.core.contracts.StatePointer
+import net.corda.core.contracts.StateRef
+import net.corda.core.contracts.TimeWindow
+import net.corda.core.contracts.TransactionResolutionException
+import net.corda.core.contracts.TransactionState
+import net.corda.core.contracts.TransactionVerificationException
+import net.corda.core.contracts.WhitelistedByZoneAttachmentConstraint
 import net.corda.core.crypto.CompositeKey
 import net.corda.core.crypto.SecureHash
 import net.corda.core.crypto.SignableData
 import net.corda.core.crypto.SignatureMetadata
 import net.corda.core.identity.Party
-import net.corda.core.internal.*
+import net.corda.core.internal.AttachmentWithContext
+import net.corda.core.internal.FlowStateMachine
+import net.corda.core.internal.StatePointerSearch
+import net.corda.core.internal.canBeTransitionedFrom
+import net.corda.core.internal.checkConstraintValidity
+import net.corda.core.internal.contractHasAutomaticConstraintPropagation
+import net.corda.core.internal.createComponentGroups
+import net.corda.core.internal.ensureMinimumPlatformVersion
+import net.corda.core.internal.internalFindTrustedAttachmentForClass
+import net.corda.core.internal.isUploaderTrusted
+import net.corda.core.internal.requiredContractClassName
+import net.corda.core.internal.toWireTransaction
+import net.corda.core.internal.warnOnce
 import net.corda.core.node.NetworkParameters
 import net.corda.core.node.ServiceHub
 import net.corda.core.node.ServicesForResolution
@@ -22,12 +57,12 @@ import net.corda.core.utilities.contextLogger
 import java.security.PublicKey
 import java.time.Duration
 import java.time.Instant
-import java.util.ArrayDeque
-import java.util.UUID
+import java.util.*
 import java.util.regex.Pattern
 import kotlin.collections.ArrayList
 import kotlin.collections.component1
 import kotlin.collections.component2
+import kotlin.math.max
 import kotlin.reflect.KClass
 
 /**
@@ -78,6 +113,8 @@ open class TransactionBuilder(
 
     private val inputsWithTransactionState = arrayListOf<StateAndRef<ContractState>>()
     private val referencesWithTransactionState = arrayListOf<TransactionState<ContractState>>()
+    private val superStates = arrayListOf<TransactionState<ContractState>>()
+    private var versionOfCurrentTx = 4;
 
     /**
      * Creates a copy of the builder.
@@ -118,6 +155,10 @@ open class TransactionBuilder(
             }
         }
     }
+
+    fun addSuperState() {
+        versionOfCurrentTx = max(versionOfCurrentTx, 5)
+    }
     // DOCEND 1
 
     /**
@@ -155,7 +196,8 @@ open class TransactionBuilder(
                             window,
                             referenceStates,
                             services.networkParametersService.currentHash),
-                    privacySalt
+                    privacySalt,
+                    versionOfCurrentTx
             )
         }
 
@@ -647,6 +689,7 @@ open class TransactionBuilder(
         checkNotary(stateAndRef)
         references.add(stateAndRef.ref)
         checkForInputsAndReferencesOverlap()
+        versionOfCurrentTx = max(versionOfCurrentTx, stateAndRef.ref.txVersion)
     }
 
     /** Adds an input [StateRef] to the transaction. */
@@ -655,6 +698,7 @@ open class TransactionBuilder(
         inputs.add(stateAndRef.ref)
         inputsWithTransactionState.add(stateAndRef)
         resolveStatePointers(stateAndRef.state)
+        versionOfCurrentTx = max(versionOfCurrentTx, stateAndRef.ref.txVersion)
         return this
     }
 
@@ -673,10 +717,10 @@ open class TransactionBuilder(
     /** Adds an output state, with associated contract code (and constraints), and notary, to the transaction. */
     @JvmOverloads
     fun addOutputState(
-        state: ContractState,
-        contract: ContractClassName = requireNotNullContractClassName(state),
-        notary: Party, encumbrance: Int? = null,
-        constraint: AttachmentConstraint = AutomaticPlaceholderConstraint
+            state: ContractState,
+            contract: ContractClassName = requireNotNullContractClassName(state),
+            notary: Party, encumbrance: Int? = null,
+            constraint: AttachmentConstraint = AutomaticPlaceholderConstraint
     ): TransactionBuilder {
         return addOutputState(TransactionState(state, contract, notary, encumbrance, constraint))
     }
@@ -684,9 +728,9 @@ open class TransactionBuilder(
     /** Adds an output state. A default notary must be specified during builder construction to use this method */
     @JvmOverloads
     fun addOutputState(
-        state: ContractState,
-        contract: ContractClassName = requireNotNullContractClassName(state),
-        constraint: AttachmentConstraint = AutomaticPlaceholderConstraint
+            state: ContractState,
+            contract: ContractClassName = requireNotNullContractClassName(state),
+            constraint: AttachmentConstraint = AutomaticPlaceholderConstraint
     ): TransactionBuilder {
         checkNotNull(notary) { "Need to specify a notary for the state, or set a default one on TransactionBuilder initialisation" }
         addOutputState(state, contract, notary!!, constraint = constraint)

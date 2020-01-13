@@ -69,13 +69,15 @@ open class CashPaymentFlow(
                     amount,
                     ourIdentityAndCert,
                     anonymousRecipient,
-                    issuerConstraint
+                    issuerConstraint,
+                    maxVersion = 4
             )
         } catch (e: InsufficientBalanceException) {
             throw CashException("Insufficient cash for spend: ${e.message}", e)
         }
 
         progressTracker.currentStep = SIGNING_TX
+        builder.addSuperState()
         logger.info("Signing transaction for: ${spendTX.lockId}")
         val tx = serviceHub.signInitialTransaction(spendTX, keysForSigning)
 
