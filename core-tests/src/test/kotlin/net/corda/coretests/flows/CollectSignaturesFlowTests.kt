@@ -168,6 +168,23 @@ class CollectSignaturesFlowTests : WithContracts {
     }
 
     @Test
+    fun `fails for missing notary session for non-notarized transaction with notary as signer`() {
+        val notaryNode = mockNet.defaultNotaryNode
+        val notary = notaryNode.info.singleIdentity()
+
+        val ptx = aliceNode.signDummyContract(alice.ref(1), 0, notary.ref(1))
+        val needsNotarisation = ptx.tx.inputs.isNotEmpty() || ptx.tx.references.isNotEmpty() || ptx.tx.timeWindow != null
+        Assert.assertFalse(needsNotarisation)
+        Assert.assertEquals(ptx.tx.requiredSigningKeys.size, 2)
+
+        // non-notarized transaction are special because notary cannot sign in finality step
+        assertThat(
+                aliceNode.collectSignatures(ptx), willThrow(errorMessage(
+                "O=Notary Service, L=Zurich, C=CH is a required signer, but no session has been passed in for them")))
+    }
+
+
+    @Test
     fun `fails when not signed by initiator`() {
         val ptx = miniCorpServices.signDummyContract(alice.ref(1))
 
@@ -175,6 +192,8 @@ class CollectSignaturesFlowTests : WithContracts {
                 aliceNode.collectSignatures(ptx),
                 willThrow(errorMessage("The Initiator of CollectSignaturesFlow must have signed the transaction.")))
     }
+
+
 
     @Test
     fun `passes with multiple initial signatures`() {
