@@ -315,8 +315,7 @@ allprojects {
     }
 
     tasks.withType(Test) {
-        forkEvery = 10
-        ignoreFailures = project.hasProperty('tests.ignoreFailures') ? project.property('tests.ignoreFailures').toBoolean() : false
+        ignoreFailures = project.hasProperty('tests.ignoreFailures') ? project.property('tests.ignoreFailures').toBoolean() : true
         failFast = project.hasProperty('tests.failFast') ? project.property('tests.failFast').toBoolean() : false
 
         // Prevent the project from creating temporary files outside of the build directory.
@@ -673,9 +672,9 @@ task parallelRegressionTest(type: ParallelTestGroup) {
 }
 task allParallelSmokeTest(type: ParallelTestGroup) {
     testGroups "slowIntegrationTest", "smokeTest"
-    numberOfShards 4
+    numberOfShards 10
     streamOutput false
-    coresPerFork 6
+    coresPerFork 3
     memoryInGbPerFork 10
     distribute DistributeTestsBy.CLASS
     nodeTaints "big"
