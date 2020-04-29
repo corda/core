@@ -12,11 +12,14 @@ import net.corda.core.internal.inputStream
 import net.corda.core.node.NetworkParameters
 import net.corda.core.node.services.AttachmentId
 import net.corda.core.serialization.internal.AttachmentsClassLoader
+import net.corda.core.serialization.internal.AttachmentsClassLoaderBuilder
 import net.corda.node.services.attachments.NodeAttachmentTrustCalculator
 import net.corda.testing.common.internal.testNetworkParameters
+import net.corda.testing.core.SerializationEnvironmentRule
 import net.corda.testing.core.internal.ContractJarTestUtils.signContractJar
 import net.corda.testing.internal.TestingNamedCacheFactory
 import net.corda.testing.internal.fakeAttachment
+import net.corda.testing.internal.fakeZIPAttachment
 import net.corda.testing.internal.services.InternalMockAttachmentStorage
 import net.corda.testing.node.internal.FINANCE_CONTRACTS_CORDAPP
 import net.corda.testing.services.MockAttachmentStorage
@@ -27,12 +30,14 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.net.URL
 import kotlin.test.assertFailsWith
 import kotlin.test.fail
+import kotlin.test.assertNotNull
 
 class AttachmentsClassLoaderTests {
     companion object {
@@ -48,6 +53,10 @@ class AttachmentsClassLoaderTests {
             }
         }
     }
+
+    @Rule
+    @JvmField
+    val testSerialization = SerializationEnvironmentRule()
 
     private lateinit var storage: MockAttachmentStorage
     private lateinit var internalStorage: InternalMockAttachmentStorage
@@ -468,5 +477,27 @@ class AttachmentsClassLoaderTests {
         )
 
         createClassloader(trustedAttachment).use {}
+    }
+
+    @Test(timeout=300_000)
+    fun `Load both JAR and ZIP archives into the attachments classloader`() {
+        val isolatedId = importAttachment(ISOLATED_CONTRACTS_JAR_PATH.openStream(), "app", "isolated.jar")
+        val zip = importAttachment(fakeZIPAttachment("importantDoc.pdf", "I am a pdf!").inputStream(), "app", "importantDoc")
+
+        AttachmentsClassLoaderBuilder.withAttachmentsClassloaderContext(listOf(isolatedId, zip).map { storage.openAttachment(it)!! },
+                                                                 testNetworkParameters(), SecureHash.allOnesHash, { true }) { classloader ->
+
+            // The importantDoc is available in the tx classloader.
+            val importantDoc = classloader.getResourceAsStream("importantDoc.pdf")
+            assertNotNull(importantDoc)
+
+            // The importantDoc is not available in the tx code classloader.
+            val importantDocParent = classloader.parent.getResourceAsStream("importantDoc.pdf")
+            assertNull(importantDocParent)
+
+            // The contract is available in the tx code classloader.
+            val contract = classloader.parent.loadClass(ISOLATED_CONTRACT_CLASS_NAME)
+            assertNotNull(contract)
+        }
     }
 }

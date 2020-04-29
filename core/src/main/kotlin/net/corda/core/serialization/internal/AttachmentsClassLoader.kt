@@ -10,6 +10,7 @@ import net.corda.core.crypto.sha256
 import net.corda.core.internal.*
 import net.corda.core.internal.cordapp.targetPlatformVersion
 import net.corda.core.node.NetworkParameters
+import net.corda.core.node.services.AttachmentId
 import net.corda.core.serialization.*
 import net.corda.core.serialization.internal.AttachmentURLStreamHandlerFactory.toUrl
 import net.corda.core.utilities.contextLogger
@@ -148,7 +149,7 @@ class AttachmentsClassLoader(attachments: List<Attachment>,
 
     // This function attempts to strike a balance between security and usability when it comes to the no-overlap rule.
     // TODO - investigate potential exploits.
-    private fun shouldCheckForNoOverlap(path: String, targetPlatformVersion: Int): Boolean {
+    private fun shouldCheckForNoOverlap(path: String, targetPlatformVersion: Int, isJARWithManifest: Boolean): Boolean {
         require(path.toLowerCase() == path)
         require(!path.contains("\\"))
 
@@ -156,11 +157,18 @@ class AttachmentsClassLoader(attachments: List<Attachment>,
             path.endsWith("/") -> false                     // Directories (packages) can overlap.
             targetPlatformVersion < 4 && ignoreDirectories.any { path.startsWith(it) } -> false    // Ignore jolokia and json-simple for old cordapps.
             path.endsWith(".class") -> true                 // All class files need to be unique.
+            isReferenceData(isJARWithManifest) -> false     // Entry not a class and within a .zip file then no need to be unique.
             !path.startsWith("meta-inf") -> true            // All files outside of META-INF need to be unique.
             (path == "meta-inf/services/net.corda.core.serialization.serializationwhitelist") -> false // Allow overlapping on the SerializationWhitelist.
             path.startsWith("meta-inf/services") -> true    // Services can't overlap to prevent a malicious party from injecting additional implementations of an interface used by a contract.
             else -> false                                          // This allows overlaps over any non-class files in "META-INF" - except 'services'.
         }
+    }
+
+    private fun isReferenceData(isJARWithManifest: Boolean): Boolean {
+        // For networks with a minimum platform version less than 7 the no overlap rule still
+        // applies for reference data, i.e. maintain previous behaviour.
+        return !isJARWithManifest && params.minimumPlatformVersion >= PlatformVersionSwitches.REMOVE_NO_OVERLAP_RULE_FOR_REFERENCE_DATA_ATTACHMENTS
     }
 
     private fun checkAttachments(attachments: List<Attachment>) {
@@ -214,6 +222,7 @@ class AttachmentsClassLoader(attachments: List<Attachment>,
             // Now open it again to compute the overlap and package ownership data.
             attachment.openAsJAR().use { jar ->
                 val targetPlatformVersion = jar.manifest?.targetPlatformVersion ?: 1
+                val isJARWithManifest = AttachmentsClassLoaderBuilder.isJAR(attachment)
                 while (true) {
                     val entry = jar.nextJarEntry ?: break
                     if (entry.isDirectory) continue
@@ -250,7 +259,7 @@ class AttachmentsClassLoader(attachments: List<Attachment>,
                     }
 
                     // Some files don't need overlap checking because they don't affect the way the code runs.
-                    if (!shouldCheckForNoOverlap(path, targetPlatformVersion)) continue
+                    if (!shouldCheckForNoOverlap(path, targetPlatformVersion, isJARWithManifest)) continue
 
                     // This calculates the hash of the current entry because the JarInputStream returns only the current entry.
                     fun entryHash() = ByteArrayOutputStream().use {
@@ -304,8 +313,22 @@ object AttachmentsClassLoaderBuilder {
     // may behave differently, so that has to be a part of the cache key.
     private data class Key(val hashes: Set<SecureHash>, val params: NetworkParameters)
 
+    data class CachedTransactionClassloaderAndProperties(val classLoader: ClassLoader,
+                                                         val serializers: Set<SerializationCustomSerializer<*, *>>,
+                                                         val whitelistedClasses: List<Class<*>>)
+
     // This runs in the DJVM so it can't use caffeine.
-    private val cache: MutableMap<Key, SerializationContext> = createSimpleCache<Key, SerializationContext>(CACHE_SIZE).toSynchronised()
+    private val cache: MutableMap<Key, CachedTransactionClassloaderAndProperties>
+                                            = createSimpleCache<Key, CachedTransactionClassloaderAndProperties>(CACHE_SIZE).toSynchronised()
+
+    private val attachmentsTypeCache: MutableMap<AttachmentId, Boolean>
+                                            = createSimpleCache<AttachmentId, Boolean>(CACHE_SIZE).toSynchronised()
+    // We consider a JAR an archive that has a manifest.
+    private fun Attachment.isJar(): Boolean = this.openAsJAR().use { it.manifest != null }
+
+    fun isJAR(attachment: Attachment): Boolean = attachmentsTypeCache.computeIfAbsent(attachment.id) {
+        attachment.isJar()
+    }
 
     /**
      * Runs the given block with serialization execution context set up with a (possibly cached) attachments classloader.
@@ -318,26 +341,37 @@ object AttachmentsClassLoaderBuilder {
                                               isAttachmentTrusted: (Attachment) -> Boolean,
                                               parent: ClassLoader = ClassLoader.getSystemClassLoader(),
                                               block: (ClassLoader) -> T): T {
-        val attachmentIds = attachments.map(Attachment::id).toSet()
 
-        val serializationContext = cache.computeIfAbsent(Key(attachmentIds, params)) {
+        // Create and Cache the base classloader that contains only the JAR attachments.
+        val jarAttachments = attachments.filter(::isJAR)
+        val jarAttachmentIds = jarAttachments.map { it.id }.toSet()
+        val transactionCodeClassloaderAndProperties = cache.computeIfAbsent(Key(jarAttachmentIds, params)) {
             // Create classloader and load serializers, whitelisted classes
-            val transactionClassLoader = AttachmentsClassLoader(attachments, params, txId, isAttachmentTrusted, parent)
+            val transactionClassLoader = AttachmentsClassLoader(jarAttachments, params, txId, isAttachmentTrusted, parent)
             val serializers = createInstancesOfClassesImplementing(transactionClassLoader, SerializationCustomSerializer::class.java)
             val whitelistedClasses = ServiceLoader.load(SerializationWhitelist::class.java, transactionClassLoader)
                     .flatMap(SerializationWhitelist::whitelist)
-
-            // Create a new serializationContext for the current transaction. In this context we will forbid
-            // deserialization of objects from the future, i.e. disable forwards compatibility. This is to ensure
-            // that app logic doesn't ignore newly added fields or accidentally downgrade data from newer state
-            // schemas to older schemas by discarding fields.
-            SerializationFactory.defaultFactory.defaultContext
-                    .withPreventDataLoss()
-                    .withClassLoader(transactionClassLoader)
-                    .withWhitelist(whitelistedClasses)
-                    .withCustomSerializers(serializers)
-                    .withoutCarpenter()
+            CachedTransactionClassloaderAndProperties(transactionClassLoader, serializers, whitelistedClasses)
         }
+
+        // If there are non-JAR attachments, create a classloader
+        val zipAttachments = attachments - jarAttachments
+        val transactionClassLoader = if (zipAttachments.isNotEmpty()) {
+            AttachmentsClassLoader(zipAttachments, params, txId, isAttachmentTrusted, transactionCodeClassloaderAndProperties.classLoader)
+        } else {
+            transactionCodeClassloaderAndProperties.classLoader
+        }
+
+        // Create a new serializationContext for the current transaction. In this context we will forbid
+        // deserialization of objects from the future, i.e. disable forwards compatibility. This is to ensure
+        // that app logic doesn't ignore newly added fields or accidentally downgrade data from newer state
+        // schemas to older schemas by discarding fields.
+        val serializationContext = SerializationFactory.defaultFactory.defaultContext
+                .withPreventDataLoss()
+                .withClassLoader(transactionClassLoader)
+                .withWhitelist(transactionCodeClassloaderAndProperties.whitelistedClasses)
+                .withCustomSerializers(transactionCodeClassloaderAndProperties.serializers)
+                .withoutCarpenter()
 
         // Deserialize all relevant classes in the transaction classloader.
         return SerializationFactory.defaultFactory.withCurrentContext(serializationContext) {
