@@ -242,6 +242,7 @@
     <ID>ForbiddenComment:AllButBlacklisted.kt$AllButBlacklisted$// TODO: add more from java.lang.reflect.</ID>
     <ID>ForbiddenComment:AllButBlacklisted.kt$AllButBlacklisted$// TODO: add more from java.net.</ID>
     <ID>ForbiddenComment:AllButBlacklisted.kt$AllButBlacklisted$// TODO: blacklistedClasses += type.name // add it, so checking is faster next time we encounter this class.</ID>
+    <ID>ForbiddenComment:AmqpRpcTests.kt$AmqpRpcTests$// TODO: We can pretend to be someone else and elevate our permissions</ID>
     <ID>ForbiddenComment:Arrangement.kt$Obligation$// TODO: should be replaced with something that uses Corda assets and/or cash?</ID>
     <ID>ForbiddenComment:Arrangement.kt$Obligation$// TODO: should only be allowed to transfer non-negative amounts</ID>
     <ID>ForbiddenComment:Arrangement.kt$RollOut$// TODO: fixing offset</ID>
@@ -435,7 +436,6 @@
     <ID>ForbiddenComment:RatesFixFlow.kt$RatesFixFlow.FixQueryFlow$// TODO: add deadline to receive</ID>
     <ID>ForbiddenComment:ResolveTransactionsFlow.kt$ResolveTransactionsFlow$// TODO: This could be done in parallel with other fetches for extra speed.</ID>
     <ID>ForbiddenComment:ResolveTransactionsFlowTest.kt$ResolveTransactionsFlowTest$// TODO: this operation should not require an explicit transaction</ID>
-    <ID>ForbiddenComment:RestrictedEntityManager.kt$RestrictedEntityManager$// TODO: Figure out which other methods on EntityManager need to be blocked?</ID>
     <ID>ForbiddenComment:ScheduledActivityObserver.kt$ScheduledActivityObserver.Companion$// TODO: Beware we are calling dynamically loaded contract code inside here.</ID>
     <ID>ForbiddenComment:ScheduledFlowIntegrationTests.kt$ScheduledFlowIntegrationTests$// TODO: the queries below are not atomic so we need to allow enough time for the scheduler to finish. Would be better to query scheduler.</ID>
     <ID>ForbiddenComment:SendTransactionFlow.kt$DataVendingFlow$// Security TODO: Check for abnormally large or malformed data requests</ID>
@@ -2010,8 +2010,6 @@
     <ID>WildcardImport:CordaModule.kt$import net.corda.core.identity.*</ID>
     <ID>WildcardImport:CordaModule.kt$import net.corda.core.transactions.*</ID>
     <ID>WildcardImport:CordaRPCOps.kt$import net.corda.core.node.services.vault.*</ID>
-    <ID>WildcardImport:CordaRPCOpsImplTest.kt$import net.corda.core.messaging.*</ID>
-    <ID>WildcardImport:CordaRPCOpsImplTest.kt$import org.assertj.core.api.Assertions.*</ID>
     <ID>WildcardImport:CordaServiceTest.kt$import kotlin.test.*</ID>
     <ID>WildcardImport:CordaViewModel.kt$import tornadofx.*</ID>
     <ID>WildcardImport:Cordapp.kt$import net.corda.core.cordapp.Cordapp.Info.*</ID>
@@ -2074,7 +2072,6 @@
     <ID>WildcardImport:EvolutionSerializerFactoryTests.kt$import kotlin.test.*</ID>
     <ID>WildcardImport:EvolutionSerializerFactoryTests.kt$import net.corda.serialization.internal.amqp.testutils.*</ID>
     <ID>WildcardImport:Explorer.kt$import tornadofx.*</ID>
-    <ID>WildcardImport:FiberDeserializationCheckingInterceptor.kt$import net.corda.node.services.statemachine.*</ID>
     <ID>WildcardImport:FinalityFlowMigration.kt$import net.corda.core.flows.*</ID>
     <ID>WildcardImport:FinalityFlowTests.kt$import net.corda.testing.core.*</ID>
     <ID>WildcardImport:FinalityFlowTests.kt$import net.corda.testing.node.internal.*</ID>
@@ -2099,8 +2096,6 @@
     <ID>WildcardImport:FlowRetryTest.kt$import net.corda.core.flows.*</ID>
     <ID>WildcardImport:FlowStackSnapshotTest.kt$import net.corda.core.flows.*</ID>
     <ID>WildcardImport:FlowStateMachine.kt$import net.corda.core.flows.*</ID>
-    <ID>WildcardImport:FlowStateMachineImpl.kt$import net.corda.core.flows.*</ID>
-    <ID>WildcardImport:FlowStateMachineImpl.kt$import net.corda.core.internal.*</ID>
     <ID>WildcardImport:FlowsDrainingModeContentionTest.kt$import net.corda.core.flows.*</ID>
     <ID>WildcardImport:FxTransactionBuildTutorialTest.kt$import net.corda.finance.*</ID>
     <ID>WildcardImport:GenericsTests.kt$import net.corda.serialization.internal.amqp.testutils.*</ID>
@@ -2418,8 +2413,6 @@
     <ID>WildcardImport:SignedTransaction.kt$import net.corda.core.contracts.*</ID>
     <ID>WildcardImport:SignedTransaction.kt$import net.corda.core.crypto.*</ID>
     <ID>WildcardImport:SimpleMQClient.kt$import org.apache.activemq.artemis.api.core.client.*</ID>
-    <ID>WildcardImport:SingleThreadedStateMachineManager.kt$import net.corda.core.internal.*</ID>
-    <ID>WildcardImport:SingleThreadedStateMachineManager.kt$import net.corda.node.services.statemachine.interceptors.*</ID>
     <ID>WildcardImport:SpringDriver.kt$import net.corda.testing.node.internal.*</ID>
     <ID>WildcardImport:StandaloneCordaRPClientTest.kt$import net.corda.core.messaging.*</ID>
     <ID>WildcardImport:StandaloneCordaRPClientTest.kt$import net.corda.core.node.services.vault.*</ID>
@@ -2500,7 +2493,6 @@
     <ID>WildcardImport:ValidatingNotaryServiceTests.kt$import net.corda.core.flows.*</ID>
     <ID>WildcardImport:ValidatingNotaryServiceTests.kt$import net.corda.testing.node.internal.*</ID>
     <ID>WildcardImport:VaultFiller.kt$import net.corda.core.contracts.*</ID>
-    <ID>WildcardImport:VaultFlowTest.kt$import net.corda.core.flows.*</ID>
     <ID>WildcardImport:VaultQueryExceptionsTests.kt$import net.corda.core.node.services.*</ID>
     <ID>WildcardImport:VaultQueryExceptionsTests.kt$import net.corda.core.node.services.vault.*</ID>
     <ID>WildcardImport:VaultQueryExceptionsTests.kt$import net.corda.core.node.services.vault.QueryCriteria.*</ID>

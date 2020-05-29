@@ -88,6 +88,7 @@ class RPCStabilityTests {
     }
 
     @Test(timeout=300_000)
+    @Ignore("Flaky test which will be addressed by CORDA-3762")
 	fun `client and server dont leak threads`() {
         fun startAndStop() {
             rpcDriver {

@@ -191,6 +191,7 @@ dependencies {
     // Integration test helpers
     integrationTestCompile "junit:junit:$junit_version"
     integrationTestCompile "org.assertj:assertj-core:${assertj_version}"
+    integrationTestCompile "org.apache.qpid:qpid-jms-client:${protonj_version}"
     
     // BFT-Smart dependencies
     compile 'com.github.bft-smart:library:master-v1.1-beta-g6215ec8-87'

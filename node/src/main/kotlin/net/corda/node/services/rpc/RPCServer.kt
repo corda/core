@@ -110,6 +110,12 @@ class RPCServer(
         private val log = contextLogger()
 
         private data class InvocationTarget(val method: Method, val instance: RPCOps)
+
+        private fun ClientMessage.getOptLongProperty(propName: String): Long? {
+            return if (containsProperty(propName)) {
+                getLongProperty(propName)
+            } else null
+        }
     }
 
     private enum class State {
@@ -377,8 +383,8 @@ class RPCServer(
         try {
             when (clientToServer) {
                 is RPCApi.ClientToServer.RpcRequest -> {
-                    val deduplicationSequenceNumber = artemisMessage.getLongProperty(RPCApi.DEDUPLICATION_SEQUENCE_NUMBER_FIELD_NAME)
-                    if (deduplicationChecker.checkDuplicateMessageId(
+                    val deduplicationSequenceNumber = artemisMessage.getOptLongProperty(RPCApi.DEDUPLICATION_SEQUENCE_NUMBER_FIELD_NAME)
+                    if (deduplicationSequenceNumber != null && deduplicationChecker.checkDuplicateMessageId(
                             identity = clientToServer.clientAddress,
                             sequenceNumber = deduplicationSequenceNumber
                     )) {
@@ -390,18 +396,19 @@ class RPCServer(
                     }
                     val context = artemisMessage.context(clientToServer.sessionId)
                     context.invocation.pushToLoggingContext()
+                    val clientAddress = SimpleString(clientToServer.clientAddress.removePrefix("queue://").toString())
                     when (arguments) {
                         is Try.Success -> {
                             log.debug { "Arguments: ${arguments.value.toTypedArray().contentDeepToString()}" }
                             rpcExecutor!!.submit {
                                 val result = invokeRpc(context, clientToServer.methodName, arguments.value)
-                                sendReply(clientToServer.replyId, clientToServer.clientAddress, result)
+                                sendReply(clientToServer.replyId, clientAddress, result)
                             }
                         }
                         is Try.Failure -> {
                             // We failed to deserialise the arguments, route back the error
                             log.warn("Inbound RPC failed", arguments.exception)
-                            sendReply(clientToServer.replyId, clientToServer.clientAddress, arguments)
+                            sendReply(clientToServer.replyId, clientAddress, arguments)
                         }
                     }
                 }

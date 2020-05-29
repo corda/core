@@ -150,7 +150,7 @@ object RPCApi {
                 return when (tag) {
                     RPCApi.ClientToServer.Tag.RPC_REQUEST -> RpcRequest(
                             clientAddress = MessageUtil.getJMSReplyTo(message),
-                            methodName = message.getStringProperty(METHOD_NAME_FIELD_NAME),
+                            methodName = message.getStringProperty(METHOD_NAME_FIELD_NAME) ?: message.getStringProperty(METHOD_NAME_FIELD_NAME_ALT),
                             serialisedArguments = OpaqueBytes(message.getBodyAsByteArray()),
                             replyId = message.replyId(),
                             sessionId = message.sessionId(),
@@ -197,6 +197,7 @@ object RPCApi {
                 message.putIntProperty(TAG_FIELD_NAME, Tag.RPC_REPLY.ordinal)
                 message.putStringProperty(DEDUPLICATION_IDENTITY_FIELD_NAME, deduplicationIdentity)
                 id.mapTo(message, RPC_ID_FIELD_NAME, RPC_ID_TIMESTAMP_FIELD_NAME)
+                message.type = ClientMessage.BYTES_TYPE;
                 message.bodyBuffer.writeBytes(result.safeSerialize(context) { Try.Failure<Any>(it) }.bytes)
             }
         }
@@ -280,14 +281,25 @@ private const val OBSERVABLE_ID_FIELD_NAME = "observable-id"
 private const val OBSERVABLE_ID_TIMESTAMP_FIELD_NAME = "observable-id-timestamp"
 private const val METHOD_NAME_FIELD_NAME = "method-name"
 
+// Alternative attributes names to be used from JMS AMQP
+const val RPC_ID_FIELD_NAME_ALT = "rpc_id"
+const val RPC_ID_TIMESTAMP_FIELD_NAME_ALT = "rpc_id_timestamp"
+const val RPC_SESSION_ID_FIELD_NAME_ALT = "rpc_session_id"
+const val RPC_SESSION_ID_TIMESTAMP_FIELD_NAME_ALT = "rpc_session_id_timestamp"
+const val METHOD_NAME_FIELD_NAME_ALT = "method_name"
+
 fun ClientMessage.replyId(): InvocationId {
 
-    return invocationId(RPC_ID_FIELD_NAME, RPC_ID_TIMESTAMP_FIELD_NAME) ?: throw IllegalStateException("Cannot extract reply id from client message.")
+    return invocationId(RPC_ID_FIELD_NAME, RPC_ID_TIMESTAMP_FIELD_NAME) ?:
+            invocationId(RPC_ID_FIELD_NAME_ALT, RPC_ID_TIMESTAMP_FIELD_NAME_ALT) ?:
+                throw IllegalStateException("Cannot extract reply id from client message.")
 }
 
 fun ClientMessage.sessionId(): SessionId {
 
-    return sessionId(RPC_SESSION_ID_FIELD_NAME, RPC_SESSION_ID_TIMESTAMP_FIELD_NAME) ?: throw IllegalStateException("Cannot extract the session id from client message.")
+    return sessionId(RPC_SESSION_ID_FIELD_NAME, RPC_SESSION_ID_TIMESTAMP_FIELD_NAME) ?:
+            sessionId(RPC_SESSION_ID_FIELD_NAME_ALT, RPC_SESSION_ID_TIMESTAMP_FIELD_NAME_ALT) ?:
+                throw IllegalStateException("Cannot extract the session id from client message.")
 }
 
 fun ClientMessage.externalTrace(): Trace? {
