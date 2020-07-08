@@ -3,7 +3,6 @@ package net.corda.node.services.statemachine.transitions
 import net.corda.core.flows.IdentifiableException
 import net.corda.node.services.statemachine.Action
 import net.corda.node.services.statemachine.ErrorState
-import net.corda.node.services.statemachine.Event
 import net.corda.node.services.statemachine.FlowError
 import net.corda.node.services.statemachine.SessionId
 import net.corda.node.services.statemachine.StateMachineState
@@ -13,7 +12,7 @@ import net.corda.node.services.statemachine.StateMachineState
 /**
  * A builder that helps creating [Transition]s. This allows for a more imperative style of specifying the transition.
  */
-class TransitionBuilder(val context: TransitionContext, initialState: StateMachineState) {
+open class TransitionBuilder(val context: TransitionContext, initialState: StateMachineState) {
     /** The current state machine state of the builder */
     var currentState = initialState
     /** The list of actions to execute */
@@ -50,10 +49,7 @@ class TransitionBuilder(val context: TransitionContext, initialState: StateMachi
                 isFlowResumed = false
         )
         actions.clear()
-        actions.addAll(arrayOf(
-                Action.RollbackTransaction,
-                Action.ScheduleEvent(Event.DoRemainingWork)
-        ))
+        actions += Action.RollbackTransaction
     }
 
     /**

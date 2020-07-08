@@ -46,7 +46,6 @@ class TopLevelTransition(
             is Event.Error -> errorTransition(event)
             is Event.TransactionCommitted -> transactionCommittedTransition(event)
             is Event.SoftShutdown -> softShutdownTransition()
-            is Event.StartErrorPropagation -> startErrorPropagationTransition()
             is Event.EnterSubFlow -> enterSubFlowTransition(event)
             is Event.LeaveSubFlow -> leaveSubFlowTransition()
             is Event.Suspend -> suspendTransition(event)
@@ -54,9 +53,8 @@ class TopLevelTransition(
             is Event.InitiateFlow -> initiateFlowTransition(event)
             is Event.AsyncOperationCompletion -> asyncOperationCompletionTransition(event)
             is Event.AsyncOperationThrows -> asyncOperationThrowsTransition(event)
-            is Event.RetryFlowFromSafePoint -> retryFlowFromSafePointTransition(startingState)
-            is Event.OvernightObservation -> overnightObservationTransition()
             is Event.WakeUpFromSleep -> wakeUpFromSleepTransition()
+            is Event.ErrorOutcomeEvent -> ErrorFlowTransition(context, startingState, event).transition()
         }
     }
 
@@ -104,24 +102,6 @@ class TopLevelTransition(
                 ),
                 continuation = FlowContinuation.Abort
         )
-    }
-
-    private fun startErrorPropagationTransition(): TransitionResult {
-        return builder {
-            val errorState = currentState.checkpoint.errorState
-            when (errorState) {
-                ErrorState.Clean -> freshErrorTransition(UnexpectedEventInState())
-                is ErrorState.Errored -> {
-                    currentState = currentState.copy(
-                            checkpoint = currentState.checkpoint.copy(
-                                    errorState = errorState.copy(propagating = true)
-                            )
-                    )
-                    actions.add(Action.ScheduleEvent(Event.DoRemainingWork))
-                }
-            }
-            FlowContinuation.ProcessEvents
-        }
     }
 
     private fun enterSubFlowTransition(event: Event.EnterSubFlow): TransitionResult {
@@ -308,27 +288,6 @@ class TopLevelTransition(
     private fun asyncOperationThrowsTransition(event: Event.AsyncOperationThrows): TransitionResult {
         return builder {
             resumeFlowLogic(event.throwable)
-        }
-    }
-
-    private fun retryFlowFromSafePointTransition(startingState: StateMachineState): TransitionResult {
-        return builder {
-            // Need to create a flow from the prior checkpoint or flow initiation.
-            actions.add(Action.CreateTransaction)
-            actions.add(Action.RetryFlowFromSafePoint(startingState))
-            actions.add(Action.CommitTransaction)
-            FlowContinuation.Abort
-        }
-    }
-
-    private fun overnightObservationTransition(): TransitionResult {
-        return builder {
-            val newCheckpoint = startingState.checkpoint.copy(status = Checkpoint.FlowStatus.HOSPITALIZED)
-            actions.add(Action.CreateTransaction)
-            actions.add(Action.PersistCheckpoint(context.id, newCheckpoint, isCheckpointUpdate = currentState.isAnyCheckpointPersisted))
-            actions.add(Action.CommitTransaction)
-            currentState = currentState.copy(checkpoint = newCheckpoint)
-            FlowContinuation.ProcessEvents
         }
     }
 

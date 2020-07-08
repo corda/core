@@ -946,12 +946,8 @@ class DBCheckpointStorageTests {
     private fun Checkpoint.addError(exception: Exception): Checkpoint {
         return copy(
             errorState = ErrorState.Errored(
-                listOf(
-                    FlowError(
-                        0,
-                        exception
-                    )
-                ), 0, false
+                listOf(FlowError(0, exception)),
+                0
             )
         )
     }

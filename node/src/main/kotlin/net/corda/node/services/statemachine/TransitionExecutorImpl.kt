@@ -84,7 +84,6 @@ class TransitionExecutorImpl(
                             ),
                             isFlowResumed = false
                     )
-                    fiber.scheduleEvent(Event.DoRemainingWork)
                     return Pair(FlowContinuation.ProcessEvents, newState)
                 }
             }

@@ -59,13 +59,6 @@ sealed class Event {
     }
 
     /**
-     * Start error propagation on a errored flow. This may be triggered by e.g. a [FlowHospital].
-     */
-    object StartErrorPropagation : Event() {
-        override fun toString() = "StartErrorPropagation"
-    }
-
-    /**
      *
      * Scheduled by the flow.
      *
@@ -148,26 +141,38 @@ sealed class Event {
     data class AsyncOperationThrows(val throwable: Throwable) : Event()
 
     /**
-     * Retry a flow from the last checkpoint, or if there is no checkpoint, restart the flow with the same invocation details.
-     */
-    object RetryFlowFromSafePoint : Event() {
-        override fun toString() = "RetryFlowFromSafePoint"
-    }
-
-    /**
-     * Keeps a flow for overnight observation. Overnight observation practically sends the fiber to get suspended,
-     * in [FlowStateMachineImpl.processEventsUntilFlowIsResumed]. Since the fiber's channel will have no more events to process,
-     * the fiber gets suspended (i.e. hospitalized).
-     */
-    object OvernightObservation : Event() {
-        override fun toString() = "OvernightObservation"
-    }
-
-    /**
      * Wake a flow up from its sleep.
      */
     object WakeUpFromSleep : Event() {
         override fun toString() = "WakeUpSleepyFlow"
+    }
+
+    /**
+     * [ErrorOutcomeEvent] represents an event that is given to a flow after passing through the state machine's error handling.
+     */
+    sealed class ErrorOutcomeEvent : Event() {
+        /**
+         * Retry a flow from the last checkpoint, or if there is no checkpoint, restart the flow with the same invocation details.
+         */
+        object RetryFlowFromSafePoint : ErrorOutcomeEvent() {
+            override fun toString() = "RetryFlowFromSafePoint"
+        }
+
+        /**
+         * Keeps a flow for overnight observation. Overnight observation practically sends the fiber to get suspended,
+         * in [FlowStateMachineImpl.processEventsUntilFlowIsResumed]. Since the fiber's channel will have no more events to process,
+         * the fiber gets suspended (i.e. hospitalized).
+         */
+        object OvernightObservation : ErrorOutcomeEvent() {
+            override fun toString() = "OvernightObservation"
+        }
+
+        /**
+         * Start error propagation on an errored flow. This may be triggered by e.g. a [FlowHospital].
+         */
+        object StartErrorPropagation : ErrorOutcomeEvent() {
+            override fun toString() = "StartErrorPropagation"
+        }
     }
 
     /**

@@ -346,7 +346,7 @@ sealed class ErrorState {
     @CordaSerializable
     object Clean : ErrorState() {
         override fun addErrors(newErrors: List<FlowError>): ErrorState {
-            return Errored(newErrors, 0, false)
+            return Errored(newErrors, 0)
         }
         override fun toString() = "Clean"
     }
@@ -361,11 +361,7 @@ sealed class ErrorState {
      *   sessions associated with the flow have been (or about to be) dirtied in counter-flows.
      */
     @CordaSerializable
-    data class Errored(
-            val errors: List<FlowError>,
-            val propagatedIndex: Int,
-            val propagating: Boolean
-    ) : ErrorState() {
+    data class Errored(val errors: List<FlowError>, val propagatedIndex: Int) : ErrorState() {
         override fun addErrors(newErrors: List<FlowError>): ErrorState {
             return copy(errors = errors + newErrors)
         }

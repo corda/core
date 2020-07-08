@@ -24,6 +24,12 @@ interface Transition {
         val continuation = build(builder)
         return TransitionResult(builder.currentState, builder.actions, continuation)
     }
+
+    fun propagateErrorBuilder(build: PropagateErrorTransitionBuilder.() -> FlowContinuation): TransitionResult {
+        val builder = PropagateErrorTransitionBuilder(context, startingState)
+        val continuation = build(builder)
+        return TransitionResult(builder.currentState, builder.actions, continuation)
+    }
 }
 
 class TransitionContext(

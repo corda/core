@@ -46,7 +46,7 @@ class DumpHistoryOnErrorInterceptor(val delegate: TransitionExecutor) : Transiti
 
             // Just if we decide to propagate, and not if just on the way to the hospital. Only log at debug level here - the flow transition
             // information is often unhelpful in the logs, and the actual cause of the problem will be logged elsewhere.
-            if (nextState.checkpoint.errorState is ErrorState.Errored && nextState.checkpoint.errorState.propagating) {
+            if (event is Event.ErrorOutcomeEvent.StartErrorPropagation && nextState.checkpoint.errorState is ErrorState.Errored) {
                 log.warn("Flow ${fiber.id} errored, dumping all transitions:\n${record!!.joinToString("\n")}")
                 for (error in nextState.checkpoint.errorState.errors) {
                     log.warn("Flow ${fiber.id} error", error.exception)

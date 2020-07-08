@@ -1,17 +1,17 @@
 package net.corda.node.services.statemachine.transitions
 
-import net.corda.core.flows.FlowException
 import net.corda.core.flows.KilledFlowException
 import net.corda.node.services.statemachine.Action
-import net.corda.node.services.statemachine.DeduplicationId
-import net.corda.node.services.statemachine.ErrorSessionMessage
 import net.corda.node.services.statemachine.Event
 import net.corda.node.services.statemachine.FlowError
-import net.corda.node.services.statemachine.FlowRemovalReason
-import net.corda.node.services.statemachine.SessionId
-import net.corda.node.services.statemachine.SessionState
 import net.corda.node.services.statemachine.StateMachineState
 
+/**
+ * [KilledFlowTransition] is the transition that is performed when a flow is killed. Logically it is almost identical to the error
+ * propgation transition (found in [ErrorFlowTransition]).
+ *
+ * After completing the transition returned from [KilledFlowTransition], the flow will terminate.
+ */
 class KilledFlowTransition(
     override val context: TransitionContext,
     override val startingState: StateMachineState,
@@ -19,7 +19,7 @@ class KilledFlowTransition(
 ) : Transition {
 
     override fun transition(): TransitionResult {
-        return builder {
+        return propagateErrorBuilder {
 
             val killedFlowError = createKilledFlowError()
             val killedFlowErrorMessage = createErrorMessageFromError(killedFlowError)
@@ -31,37 +31,27 @@ class KilledFlowTransition(
             )
             val newCheckpoint = startingState.checkpoint.setSessions(sessions = newSessions)
             currentState = currentState.copy(checkpoint = newCheckpoint)
-            actions.add(
-                Action.PropagateErrors(
-                    errorMessages,
-                    initiatedSessions,
-                    startingState.senderUUID
-                )
+            actions += Action.PropagateErrors(
+                errorMessages,
+                initiatedSessions,
+                startingState.senderUUID
             )
 
             if (!startingState.isFlowResumed) {
-                actions.add(Action.CreateTransaction)
+                actions += Action.CreateTransaction
             }
             // The checkpoint and soft locks are also removed directly in [StateMachineManager.killFlow]
             if (startingState.isAnyCheckpointPersisted) {
                 actions.add(Action.RemoveCheckpoint(context.id))
             }
-            actions.addAll(
-                arrayOf(
-                    Action.PersistDeduplicationFacts(currentState.pendingDeduplicationHandlers),
-                    Action.ReleaseSoftLocks(context.id.uuid),
-                    Action.CommitTransaction,
-                    Action.AcknowledgeMessages(currentState.pendingDeduplicationHandlers),
-                    Action.RemoveSessionBindings(currentState.checkpoint.checkpointState.sessions.keys)
-                )
-            )
 
             currentState = currentState.copy(
                 pendingDeduplicationHandlers = emptyList(),
                 isRemoved = true
             )
 
-            actions.add(Action.RemoveFlow(context.id, createKilledRemovalReason(killedFlowError), currentState))
+            addCleanupActions(listOf(killedFlowError))
+
             FlowContinuation.Abort
         }
     }
@@ -72,50 +62,5 @@ class KilledFlowTransition(
             else -> KilledFlowException(context.id)
         }
         return FlowError(context.secureRandom.nextLong(), exception)
-    }
-
-    // Purposely left the same as [bufferErrorMessagesInInitiatingSessions] in [ErrorFlowTransition] so that it can be refactored
-    private fun createErrorMessageFromError(error: FlowError): ErrorSessionMessage {
-        val exception = error.exception
-        // If the exception doesn't contain an originalErrorId that means it's a fresh FlowException that should
-        // propagate to the neighbouring flows. If it has the ID filled in that means it's a rethrown FlowException and
-        // shouldn't be propagated.
-        return if (exception is FlowException && exception.originalErrorId == null) {
-            ErrorSessionMessage(flowException = exception, errorId = error.errorId)
-        } else {
-            ErrorSessionMessage(flowException = null, errorId = error.errorId)
-        }
-    }
-
-    // Purposely left the same as [bufferErrorMessagesInInitiatingSessions] in [ErrorFlowTransition] so that it can be refactored
-    // Buffer error messages in Initiating sessions, return the initialised ones.
-    private fun bufferErrorMessagesInInitiatingSessions(
-        sessions: Map<SessionId, SessionState>,
-        errorMessages: List<ErrorSessionMessage>
-    ): Pair<List<SessionState.Initiated>, Map<SessionId, SessionState>> {
-        val newSessions = sessions.mapValues { (sourceSessionId, sessionState) ->
-            if (sessionState is SessionState.Initiating && sessionState.rejectionError == null) {
-                // *prepend* the error messages in order to error the other sessions ASAP. The other messages will
-                // be delivered all the same, they just won't trigger flow resumption because of dirtiness.
-                val errorMessagesWithDeduplication = errorMessages.map {
-                    DeduplicationId.createForError(it.errorId, sourceSessionId) to it
-                }
-                sessionState.copy(bufferedMessages = errorMessagesWithDeduplication + sessionState.bufferedMessages)
-            } else {
-                sessionState
-            }
-        }
-        val initiatedSessions = sessions.values.mapNotNull { session ->
-            if (session is SessionState.Initiated && session.errors.isEmpty()) {
-                session
-            } else {
-                null
-            }
-        }
-        return Pair(initiatedSessions, newSessions)
-    }
-
-    private fun createKilledRemovalReason(error: FlowError): FlowRemovalReason.ErrorFinish {
-        return FlowRemovalReason.ErrorFinish(listOf(error))
     }
 }

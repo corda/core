@@ -219,19 +219,19 @@ class StaffedFlowHospital(private val flowMessaging: FlowMessaging,
                 Diagnosis.DISCHARGE -> {
                     val backOff = calculateBackOffForChronicCondition(report, medicalHistory, currentState)
                     log.info("Flow error discharged from hospital (delay ${backOff.seconds}s) by ${report.by} (error was ${report.error.message})")
-                    onFlowDischarged.forEach { hook -> hook.invoke(flowFiber.id, report.by.map{it.toString()}) }
-                    Triple(Outcome.DISCHARGE, Event.RetryFlowFromSafePoint, backOff)
+                    onFlowDischarged.forEach { hook -> hook.invoke(flowFiber.id, report.by.map { it.toString() }) }
+                    Triple(Outcome.DISCHARGE, Event.ErrorOutcomeEvent.RetryFlowFromSafePoint, backOff)
                 }
                 Diagnosis.OVERNIGHT_OBSERVATION -> {
                     log.info("Flow error kept for overnight observation by ${report.by} (error was ${report.error.message})")
                     // We don't schedule a next event for the flow - it will automatically retry from its checkpoint on node restart
-                    onFlowKeptForOvernightObservation.forEach { hook -> hook.invoke(flowFiber.id, report.by.map{it.toString()}) }
-                    Triple(Outcome.OVERNIGHT_OBSERVATION, Event.OvernightObservation, 0.seconds)
+                    onFlowKeptForOvernightObservation.forEach { hook -> hook.invoke(flowFiber.id, report.by.map { it.toString() }) }
+                    Triple(Outcome.OVERNIGHT_OBSERVATION, Event.ErrorOutcomeEvent.OvernightObservation, 0.seconds)
                 }
                 Diagnosis.NOT_MY_SPECIALTY, Diagnosis.TERMINAL -> {
                     // None of the staff care for these errors, or someone decided it is a terminal condition, so we let them propagate
                     log.info("Flow error allowed to propagate", report.error)
-                    Triple(Outcome.UNTREATABLE, Event.StartErrorPropagation, 0.seconds)
+                    Triple(Outcome.UNTREATABLE, Event.ErrorOutcomeEvent.StartErrorPropagation, 0.seconds)
                 }
             }
 
