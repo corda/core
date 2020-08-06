@@ -52,7 +52,7 @@ class TransitionExecutorImpl(
                                 listOf(
                                     FlowError(
                                         secureRandom.nextLong(),
-                                        ErrorStateTransitionException(exception)
+                                        ErrorStateTransitionException(exception, event)
                                     )
                                 )
                             )

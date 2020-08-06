@@ -5,10 +5,12 @@ import net.corda.core.flows.FlowException
 import net.corda.core.flows.HospitalizeFlowException
 import net.corda.core.flows.NotaryError
 import net.corda.core.flows.NotaryException
+import net.corda.core.flows.PartyNotFoundException
 import net.corda.core.flows.ReceiveFinalityFlow
 import net.corda.core.flows.ReceiveTransactionFlow
 import net.corda.core.flows.StateMachineRunId
 import net.corda.core.flows.UnexpectedFlowEndException
+import net.corda.core.identity.CordaX500Name
 import net.corda.core.identity.Party
 import net.corda.core.internal.DeclaredField
 import net.corda.core.internal.ThreadBox
@@ -21,6 +23,8 @@ import net.corda.core.utilities.debug
 import net.corda.core.utilities.minutes
 import net.corda.core.utilities.seconds
 import net.corda.node.services.FinalityHandler
+import net.corda.node.services.api.NetworkMapCacheInternal
+import net.corda.node.services.network.NetworkMapUpdater
 import org.hibernate.exception.ConstraintViolationException
 import rx.subjects.PublishSubject
 import java.io.Closeable
@@ -40,9 +44,13 @@ import kotlin.math.pow
  * This hospital consults "staff" to see if they can automatically diagnose and treat flows.
  */
 @Suppress("TooManyFunctions")
-class StaffedFlowHospital(private val flowMessaging: FlowMessaging,
-                          private val clock: Clock,
-                          private val ourSenderUUID: String) : Closeable {
+class StaffedFlowHospital(
+        private val flowMessaging: FlowMessaging,
+        private val clock: Clock,
+        private val ourSenderUUID: String,
+        private val networkMapCacheInternal: NetworkMapCacheInternal,
+        private val networkMapUpdater: NetworkMapUpdater
+) : Closeable {
     companion object {
         private val log = contextLogger()
         private val staff = listOf(
@@ -55,6 +63,7 @@ class StaffedFlowHospital(private val flowMessaging: FlowMessaging,
             TransitionErrorGeneralPractitioner,
             SedationNurse,
             NotaryDoctor,
+            AnonymousPsychiatrist,
             ResuscitationSpecialist
         )
 
@@ -74,6 +83,9 @@ class StaffedFlowHospital(private val flowMessaging: FlowMessaging,
 
         @VisibleForTesting
         val onFlowAdmitted = mutableListOf<(id: StateMachineRunId) -> Unit>()
+
+        @VisibleForTesting
+        val onFlowKeptForWaitingForNetworkMapRefresh = mutableListOf<(id: StateMachineRunId, by: List<String>) -> Unit>()
     }
 
     private val hospitalJobTimer = Timer("FlowHospitalJobTimer", true)
@@ -98,6 +110,32 @@ class StaffedFlowHospital(private val flowMessaging: FlowMessaging,
         }, 1.minutes.toMillis(), 1.minutes.toMillis())
     }
 
+    //when the update completes we start the processing of the nodes
+    private fun checkNodesWaitingForRefresh(@Suppress("UNUSED_PARAMETER") update: Unit) {
+        mutex.locked {
+            for ((name, flows) in nodesWaitingForNetworkMapRefresh) {
+                if (networkMapCacheInternal.getNodeByLegalName(name) != null) {
+                    scheduleEvents(flows, "Party: $name is now in network map, retrying flow: ", Event.RetryFlowFromSafePoint)
+                } else {
+                    scheduleEvents(flows, "Party: $name still not in network map, propagating error for flow: ", Event.StartErrorPropagation)
+                }
+            }
+        }
+    }
+
+    private fun scheduleEvents(flows: Set<StateMachineRunId>, message: String, event: Event) {
+        for (runId in flows) {
+            flowsInHospital[runId]?.let { fiber ->
+                log.info(message + runId)
+                fiber.scheduleEvent(event)
+            }
+        }
+    }
+
+    fun start() {
+        networkMapUpdater.updateComplete.subscribe(::checkNodesWaitingForRefresh)
+    }
+
     /**
      * Represents the flows that have been admitted to the hospital for treatment.
      * Flows should be removed from [flowsInHospital] when they have completed a successful transition.
@@ -116,6 +154,7 @@ class StaffedFlowHospital(private val flowMessaging: FlowMessaging,
         val flowPatients = HashMap<StateMachineRunId, FlowMedicalHistory>()
         val treatableSessionInits = HashMap<StateMachineRunId, InternalSessionInitRecord>()
         val recordsPublisher = PublishSubject.create<MedicalRecord>()
+        val nodesWaitingForNetworkMapRefresh = HashMap<CordaX500Name, MutableSet<StateMachineRunId>>()
     })
     private val secureRandom = newSecureRandom()
 
@@ -214,13 +253,15 @@ class StaffedFlowHospital(private val flowMessaging: FlowMessaging,
         }
     }
 
+    private data class EventOutcome(val outcome: Outcome, val event: Event?, val duration: Duration)
+
     @Suppress("ComplexMethod")
     private fun admit(flowFiber: FlowFiber, currentState: StateMachineState, errors: List<Throwable>) {
         val time = clock.instant()
         log.info("Flow ${flowFiber.id} admitted to hospital in state $currentState")
         onFlowAdmitted.forEach { it.invoke(flowFiber.id) }
 
-        val (event, backOffForChronicCondition) = mutex.locked {
+        val (_, event, backOffForChronicCondition) = mutex.locked {
             val medicalHistory = flowPatients.computeIfAbsent(flowFiber.id) { FlowMedicalHistory() }
 
             val report = consultStaff(flowFiber, currentState, errors, medicalHistory)
@@ -230,19 +271,25 @@ class StaffedFlowHospital(private val flowMessaging: FlowMessaging,
                     val backOff = calculateBackOffForChronicCondition(report, medicalHistory, currentState)
                     log.info("Flow error discharged from hospital (delay ${backOff.seconds}s) by ${report.by} (error was ${report.error.message})")
                     onFlowDischarged.forEach { hook -> hook.invoke(flowFiber.id, report.by.map { it.toString() }) }
-                    Triple(Outcome.DISCHARGE, Event.RetryFlowFromSafePoint, backOff)
+                    EventOutcome(Outcome.DISCHARGE, Event.RetryFlowFromSafePoint, backOff)
+                }
+                Diagnosis.WAITING_FOR_NETWORK_MAP_REFRESH -> {
+                    log.info("Flow error is waiting for networkmap refresh (error was ${report.error.message})")
+                    onFlowKeptForWaitingForNetworkMapRefresh.forEach { hook -> hook.invoke(flowFiber.id, report.by.map{it.toString()}) }
+                    nodesWaitingForNetworkMapRefresh.getOrPut((report.error.cause as PartyNotFoundException).party) { HashSet() }.add(flowFiber.id)
+                    EventOutcome(Outcome.WAITING_FOR_NETWORK_MAP_REFRESH, null, 0.seconds)
                 }
                 Diagnosis.OVERNIGHT_OBSERVATION -> {
                     log.info("Flow error kept for overnight observation by ${report.by} (error was ${report.error.message})")
                     // We don't schedule a next event for the flow - it will automatically retry from its checkpoint on node restart
                     onFlowKeptForOvernightObservation.forEach { hook -> hook.invoke(flowFiber.id, report.by.map { it.toString() }) }
-                    Triple(Outcome.OVERNIGHT_OBSERVATION, Event.OvernightObservation, 0.seconds)
+                    EventOutcome(Outcome.OVERNIGHT_OBSERVATION, Event.OvernightObservation, 0.seconds)
                 }
                 Diagnosis.NOT_MY_SPECIALTY, Diagnosis.TERMINAL -> {
                     // None of the staff care for these errors, or someone decided it is a terminal condition, so we let them propagate
                     log.info("Flow error allowed to propagate", report.error)
                     onFlowErrorPropagated.forEach { hook -> hook.invoke(flowFiber.id, report.by.map { it.toString() }) }
-                    Triple(Outcome.UNTREATABLE, Event.StartErrorPropagation, 0.seconds)
+                    EventOutcome(Outcome.UNTREATABLE, Event.StartErrorPropagation, 0.seconds)
                 }
                 Diagnosis.RESUSCITATE -> {
                     // reschedule the last outcome as it failed to process it
@@ -251,7 +298,10 @@ class StaffedFlowHospital(private val flowMessaging: FlowMessaging,
                     val outcome = medicalHistory.records.last().outcome
                     log.info("Flow error to be resuscitated, rescheduling previous outcome - $outcome (delay ${backOff.seconds}s) by ${report.by} (error was ${report.error.message})")
                     onFlowResuscitated.forEach { hook -> hook.invoke(flowFiber.id, report.by.map { it.toString() }, outcome) }
-                    Triple(outcome, outcome.event, backOff)
+                    // acquire event from the exception as for WAITING_FOR_NETWORK_MAP_REFRESH we can't get it from the medical history
+                    val error = report.error as ErrorStateTransitionException
+                    val event = error.event
+                    EventOutcome(outcome, event, backOff)
                 }
             }
 
@@ -259,15 +309,17 @@ class StaffedFlowHospital(private val flowMessaging: FlowMessaging,
             val record = MedicalRecord.Flow(time, flowFiber.id, numberOfSuspends, errors, report.by, outcome)
             medicalHistory.records += record
             recordsPublisher.onNext(record)
-            Pair(event, backOffForChronicCondition)
+            EventOutcome(outcome, event, backOffForChronicCondition)
         }
 
-        if (backOffForChronicCondition.isZero) {
-            flowFiber.scheduleEvent(event)
-        } else {
-            hospitalJobTimer.schedule(timerTask {
+        if(event != null) {
+            if (backOffForChronicCondition.isZero) {
                 flowFiber.scheduleEvent(event)
-            }, backOffForChronicCondition.toMillis())
+            } else {
+                hospitalJobTimer.schedule(timerTask {
+                    flowFiber.scheduleEvent(event)
+                }, backOffForChronicCondition.toMillis())
+            }
         }
     }
 
@@ -393,10 +445,11 @@ class StaffedFlowHospital(private val flowMessaging: FlowMessaging,
         }
     }
 
-    enum class Outcome(val event: Event) {
-        DISCHARGE(Event.RetryFlowFromSafePoint),
-        OVERNIGHT_OBSERVATION(Event.OvernightObservation),
-        UNTREATABLE(Event.StartErrorPropagation)
+    enum class Outcome {
+        DISCHARGE,
+        OVERNIGHT_OBSERVATION,
+        UNTREATABLE,
+        WAITING_FOR_NETWORK_MAP_REFRESH
     }
 
     /** The order of the enum values are in priority order. */
@@ -405,6 +458,8 @@ class StaffedFlowHospital(private val flowMessaging: FlowMessaging,
         RESUSCITATE,
         /** The flow should not see other staff members */
         TERMINAL,
+        /** The flow should wait until the network map is refreshed. */
+        WAITING_FOR_NETWORK_MAP_REFRESH,
         /** Retry from last safe point. */
         DISCHARGE,
         /** Park and await intervention. */
@@ -645,6 +700,26 @@ class StaffedFlowHospital(private val flowMessaging: FlowMessaging,
                 return Diagnosis.DISCHARGE
             }
             return Diagnosis.NOT_MY_SPECIALTY
+        }
+    }
+
+    object AnonymousPsychiatrist : Staff {
+        override fun consult(flowFiber: FlowFiber,
+                             currentState: StateMachineState,
+                             newError: Throwable,
+                             history: FlowMedicalHistory): Diagnosis {
+            val diagnosis: Diagnosis
+            if(newError is StateTransitionException && newError.exception is PartyNotFoundException) {
+                val partyNotFoundException = newError.exception
+                log.info("Adding to waiting for network map refresh: ${partyNotFoundException.party}")
+                diagnosis = Diagnosis.WAITING_FOR_NETWORK_MAP_REFRESH
+            } else if(newError is PartyNotFoundException) {
+                log.info("Adding to waiting for network map refresh: ${newError.party}")
+                diagnosis = Diagnosis.WAITING_FOR_NETWORK_MAP_REFRESH
+            } else {
+                diagnosis = Diagnosis.NOT_MY_SPECIALTY
+            }
+            return diagnosis
         }
     }
 

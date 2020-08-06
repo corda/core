@@ -17,7 +17,7 @@ class StateTransitionException(
 
 class AsyncOperationTransitionException(exception: Exception) : CordaRuntimeException(exception.message, exception)
 
-class ErrorStateTransitionException(val exception: Exception) : CordaRuntimeException(exception.message, exception)
+class ErrorStateTransitionException(val exception: Exception, val event: Event) : CordaRuntimeException(exception.message, exception)
 
 class ReloadFlowFromCheckpointException(cause: Exception) : CordaRuntimeException(
     "Could not reload flow from checkpoint. This is likely due to a discrepancy " +

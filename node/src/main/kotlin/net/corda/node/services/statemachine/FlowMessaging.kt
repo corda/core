@@ -5,6 +5,7 @@ import com.esotericsoftware.kryo.KryoException
 import net.corda.core.context.InvocationOrigin
 import net.corda.core.flows.Destination
 import net.corda.core.flows.FlowException
+import net.corda.core.flows.PartyNotFoundException
 import net.corda.core.identity.AnonymousParty
 import net.corda.core.identity.Party
 import net.corda.core.serialization.SerializedBytes
@@ -73,14 +74,21 @@ class FlowMessagingImpl(val serviceHub: ServiceHubInternal): FlowMessaging {
             destination
         } else {
             // We assume that the destination type has already been checked by initiateFlow
-            val wellKnown = requireNotNull(serviceHub.identityService.wellKnownPartyFromAnonymous(destination as AnonymousParty)) {
-                "We do not know who $destination belongs to"
+            val anonymousParty = destination as AnonymousParty
+            val wellKnown = requireNotNull(serviceHub.identityService.wellKnownPartyFromAnonymous(anonymousParty)) {
+                val party = serviceHub.identityService.partyFromKey(anonymousParty.owningKey)
+                requireNotNull(party) {
+                    "We do not know who $destination belongs to"
+                }
+                throw PartyNotFoundException("Could not find party: ${party!!.name}", party.name)
             }
             log.trace { "Sending message $deduplicationId $message to $wellKnown on behalf of $destination" }
             wellKnown
         }
         val networkMessage = serviceHub.networkService.createMessage(sessionTopic, serializeSessionMessage(message).bytes, deduplicationId, message.additionalHeaders(party))
-        val partyInfo = requireNotNull(serviceHub.networkMapCache.getPartyInfo(party)) { "Don't know about $party" }
+        val partyInfo = requireNotNull(serviceHub.networkMapCache.getPartyInfo(party)) {
+            throw PartyNotFoundException("Could not find party: ${party.name}", party.name)
+        }
         val address = serviceHub.networkService.getAddressOfParty(partyInfo)
         val sequenceKey = when (message) {
             is InitialSessionMessage -> message.initiatorSessionId

@@ -169,6 +169,7 @@ internal class SingleThreadedStateMachineManager(
         )
 
         val fibers = restoreFlowsFromCheckpoints()
+        flowHospital.start()
         metrics.register("Flows.InFlight", Gauge<Int> { innerState.flows.size })
 
         setFlowDefaultUncaughtExceptionHandler()
@@ -740,7 +741,7 @@ internal class SingleThreadedStateMachineManager(
     private fun makeFlowHospital() : StaffedFlowHospital {
         // If the node is running as a notary service, we don't retain errored session initiation requests in case of missing Cordapps
         // to avoid memory leaks if the notary is under heavy load.
-        return StaffedFlowHospital(flowMessaging, serviceHub.clock, ourSenderUUID)
+        return StaffedFlowHospital(flowMessaging, serviceHub.clock, ourSenderUUID, serviceHub.networkMapCache, serviceHub.networkMapUpdater)
     }
 
     private fun StateMachineInnerState.removeFlowOrderly(
