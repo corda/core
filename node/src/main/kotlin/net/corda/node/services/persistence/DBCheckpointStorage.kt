@@ -88,7 +88,7 @@ class DBCheckpointStorage(
 
     @Entity
     @javax.persistence.Table(name = "${NODE_DATABASE_PREFIX}checkpoints")
-    data class DBFlowCheckpoint(
+    class DBFlowCheckpoint(
         @Id
         @Column(name = "flow_id", length = 64, nullable = false)
         var flowId: String,
@@ -127,7 +127,7 @@ class DBCheckpointStorage(
 
     @Entity
     @javax.persistence.Table(name = "${NODE_DATABASE_PREFIX}checkpoint_blobs")
-    data class DBFlowCheckpointBlob(
+    class DBFlowCheckpointBlob(
         @Id
         @Column(name = "flow_id", length = 64, nullable = false)
         var flowId: String,
@@ -146,39 +146,11 @@ class DBCheckpointStorage(
 
         @Column(name = "timestamp")
         var persistedInstant: Instant
-    ) {
-        override fun equals(other: Any?): Boolean {
-            if (this === other) return true
-            if (javaClass != other?.javaClass) return false
-
-            other as DBFlowCheckpointBlob
-
-            if (flowId != other.flowId) return false
-            if (!checkpoint.contentEquals(other.checkpoint)) return false
-
-            if (!(flowStack ?: EMPTY_BYTE_ARRAY)!!.contentEquals(other.flowStack ?: EMPTY_BYTE_ARRAY)) {
-                return false
-            }
-
-            if (!hmac.contentEquals(other.hmac)) return false
-            if (persistedInstant != other.persistedInstant) return false
-
-            return true
-        }
-
-        override fun hashCode(): Int {
-            var result = flowId.hashCode()
-            result = 31 * result + checkpoint.contentHashCode()
-            result = 31 * result + (flowStack?.contentHashCode() ?: 0)
-            result = 31 * result + hmac.contentHashCode()
-            result = 31 * result + persistedInstant.hashCode()
-            return result
-        }
-    }
+    )
 
     @Entity
     @javax.persistence.Table(name = "${NODE_DATABASE_PREFIX}flow_results")
-    data class DBFlowResult(
+    class DBFlowResult(
         @Id
         @Column(name = "flow_id", length = 64, nullable = false)
         var flow_id: String,
@@ -189,31 +161,11 @@ class DBCheckpointStorage(
 
         @Column(name = "timestamp")
         val persistedInstant: Instant
-    ) {
-        override fun equals(other: Any?): Boolean {
-            if (this === other) return true
-            if (javaClass != other?.javaClass) return false
-
-            other as DBFlowResult
-
-            if (flow_id != other.flow_id) return false
-            if (!value.contentEquals(other.value)) return false
-            if (persistedInstant != other.persistedInstant) return false
-
-            return true
-        }
-
-        override fun hashCode(): Int {
-            var result = flow_id.hashCode()
-            result = 31 * result + value.contentHashCode()
-            result = 31 * result + persistedInstant.hashCode()
-            return result
-        }
-    }
+    )
 
     @Entity
     @javax.persistence.Table(name = "${NODE_DATABASE_PREFIX}flow_exceptions")
-    data class DBFlowException(
+    class DBFlowException(
         @Id
         @Column(name = "flow_id", length = 64, nullable = false)
         var flow_id: String,
@@ -233,39 +185,11 @@ class DBCheckpointStorage(
 
         @Column(name = "timestamp")
         val persistedInstant: Instant
-    ) {
-        override fun equals(other: Any?): Boolean {
-            if (this === other) return true
-            if (javaClass != other?.javaClass) return false
-
-            other as DBFlowException
-
-            if (flow_id != other.flow_id) return false
-            if (type != other.type) return false
-            if (message != other.message) return false
-            if (stackTrace != other.stackTrace) return false
-            if (!(value ?: EMPTY_BYTE_ARRAY)!!.contentEquals(other.value ?: EMPTY_BYTE_ARRAY)) {
-                return false
-            }
-            if (persistedInstant != other.persistedInstant) return false
-
-            return true
-        }
-
-        override fun hashCode(): Int {
-            var result = flow_id.hashCode()
-            result = 31 * result + type.hashCode()
-            result = 31 * result + (message?.hashCode() ?: 0)
-            result = 31 * result + stackTrace.hashCode()
-            result = 31 * result + (value?.contentHashCode() ?: 0)
-            result = 31 * result + persistedInstant.hashCode()
-            return result
-        }
-    }
+    )
 
     @Entity
     @javax.persistence.Table(name = "${NODE_DATABASE_PREFIX}flow_metadata")
-    data class DBFlowMetadata(
+    class DBFlowMetadata(
         @Id
         @Column(name = "flow_id", length = 64, nullable = false)
         var flowId: String,
