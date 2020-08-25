@@ -133,6 +133,7 @@ import net.corda.node.services.statemachine.FlowLogicRefFactoryImpl
 import net.corda.node.services.statemachine.FlowMonitor
 import net.corda.node.services.statemachine.FlowOperator
 import net.corda.node.services.statemachine.FlowStateMachineImpl
+import net.corda.node.services.statemachine.LockingRpc
 import net.corda.node.services.statemachine.SingleThreadedStateMachineManager
 import net.corda.node.services.statemachine.StateMachineManager
 import net.corda.node.services.transactions.BasicVerifierFactoryService
@@ -416,7 +417,9 @@ abstract class AbstractNode<S>(val configuration: NodeConfiguration,
 
         val attachmentTrustInfoRPCOps = Pair(AttachmentTrustInfoRPCOps::class.java, AttachmentTrustInfoRPCOpsImpl(services.attachmentTrustCalculator))
 
-        return listOf(cordaRPCOpsImpl, checkpointRPCOpsImpl, attachmentTrustInfoRPCOps).map { rpcOpsImplPair ->
+        val lockingRpcOps = Pair(LockingRpc::class.java, smm)
+
+        return listOf(cordaRPCOpsImpl, checkpointRPCOpsImpl, attachmentTrustInfoRPCOps, lockingRpcOps).map { rpcOpsImplPair ->
             // Mind that order of proxies is important
             val targetInterface = rpcOpsImplPair.first
             val stage1Proxy = AuthenticatedRpcOpsProxy.proxy(rpcOpsImplPair.second, targetInterface)

@@ -15,6 +15,7 @@ import net.corda.core.flows.StateMachineRunId
 import net.corda.core.identity.Party
 import net.corda.core.internal.FlowStateMachine
 import net.corda.core.internal.FlowStateMachineHandle
+import net.corda.core.internal.PLATFORM_VERSION
 import net.corda.core.internal.VisibleForTesting
 import net.corda.core.internal.bufferUntilSubscribed
 import net.corda.core.internal.castIfPossible
@@ -115,6 +116,7 @@ internal class SingleThreadedStateMachineManager(
     private lateinit var flowCreator: FlowCreator
 
     override val flowHospital: StaffedFlowHospital = makeFlowHospital()
+    private val awaitLocks = HashMap<StateMachineRunId, Pair<Checkpoint.FlowStatus, OpenFuture<Checkpoint.FlowStatus>>>()
     private val transitionExecutor = makeTransitionExecutor()
     private val reloadCheckpointAfterSuspend = serviceHub.configuration.reloadCheckpointAfterSuspend
 
@@ -143,6 +145,49 @@ internal class SingleThreadedStateMachineManager(
     private fun FlowStateMachineImpl<*>.hasValidStatus(validStatuses: Set<Checkpoint.FlowStatus>): Boolean {
         return transientState.checkpoint.status in validStatuses
     }
+
+    override val protocolVersion: Int = PLATFORM_VERSION
+
+    // would be good to return the event it processed, but this is more difficult because we need a way to extract this info
+    override fun await(id: StateMachineRunId, status: Checkpoint.FlowStatus): CordaFuture<Checkpoint.FlowStatus> {
+        innerState.withLock { flows[id] } ?: return openFuture<Checkpoint.FlowStatus>().apply {
+            setException(IllegalArgumentException("Flow with $id does not exist"))
+        }
+        return openFuture<Checkpoint.FlowStatus>().also { awaitLocks[id] = status to it }
+    }
+
+    override fun release(id: StateMachineRunId): Boolean {
+        val flow = innerState.withLock { flows[id] } ?: return false
+        return awaitLocks[id]?.let { (_, future) ->
+            if (future.isDone) {
+                flow.fiber.transientState.lock.release()
+                true
+            } else {
+                false
+            }
+        } ?: false
+    }
+
+//    // would be good to return the event it processed, but this is more difficult because we need a way to extract this info
+//    fun await(id: StateMachineRunId, status: Checkpoint.FlowStatus, timeout: Duration): CordaFuture<Checkpoint.FlowStatus> {
+//        val flow = innerState.withLock { flows[id] } ?: return openFuture<Checkpoint.FlowStatus>().apply {
+//            setException(IllegalArgumentException("Flow with $id does not exist"))
+//        }
+//        // need to be able to return it, but this means i need to complete it on another thread (therefore do i need an executor)
+//        // otherwise i should not be using a future
+//        val future = openFuture<>()
+//        do {
+//            flow.fiber.transientState.run {
+//                lock.drainPermits().acquire()
+//                checkpoint.status.let {
+//                    if (it == status) {
+//                        return doneFuture(status)
+//                    }
+//                }
+//                lock.release()
+//            }
+//        } while (flow.fiber.transientState.checkpoint.status != status)
+//    }
 
     /**
      * An observable that emits triples of the changing flow, the type of change, and a process-specific ID number

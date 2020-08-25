@@ -3,6 +3,7 @@ package net.corda.node.services.statemachine.transitions
 import net.corda.core.flows.FlowException
 import net.corda.core.flows.KilledFlowException
 import net.corda.node.services.statemachine.Action
+import net.corda.node.services.statemachine.Checkpoint
 import net.corda.node.services.statemachine.DeduplicationId
 import net.corda.node.services.statemachine.ErrorSessionMessage
 import net.corda.node.services.statemachine.Event
@@ -29,7 +30,7 @@ class KilledFlowTransition(
                 startingState.checkpoint.checkpointState.sessions,
                 errorMessages
             )
-            val newCheckpoint = startingState.checkpoint.setSessions(sessions = newSessions)
+            val newCheckpoint = startingState.checkpoint.copy(status = Checkpoint.FlowStatus.KILLED).setSessions(sessions = newSessions)
             currentState = currentState.copy(checkpoint = newCheckpoint)
             actions.add(
                 Action.PropagateErrors(

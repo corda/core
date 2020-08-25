@@ -1,6 +1,7 @@
 package net.corda.node.flows
 
 import co.paralleluniverse.fibers.Suspendable
+import net.corda.client.rpc.ext.MultiRPCClient
 import net.corda.core.contracts.StateRef
 import net.corda.core.crypto.SecureHash
 import net.corda.core.flows.FlowExternalOperation
@@ -26,6 +27,9 @@ import net.corda.core.utilities.seconds
 import net.corda.finance.DOLLARS
 import net.corda.finance.contracts.asset.Cash
 import net.corda.finance.flows.CashIssueFlow
+import net.corda.node.services.Permissions
+import net.corda.node.services.statemachine.Checkpoint
+import net.corda.node.services.statemachine.LockingRpc
 import net.corda.testing.core.ALICE_NAME
 import net.corda.testing.core.BOB_NAME
 import net.corda.testing.core.CHARLIE_NAME
@@ -34,6 +38,8 @@ import net.corda.testing.driver.DriverParameters
 import net.corda.testing.driver.NodeParameters
 import net.corda.testing.driver.OutOfProcess
 import net.corda.testing.driver.driver
+import net.corda.testing.driver.internal.incrementalPortAllocation
+import net.corda.testing.node.User
 import net.corda.testing.node.internal.FINANCE_CORDAPPS
 import org.assertj.core.api.Assertions
 import org.junit.Test
@@ -52,8 +58,15 @@ class KillFlowTest {
 
     @Test(timeout = 300_000)
     fun `a killed flow will end when it reaches the next suspension point`() {
+
+        // Allocate named port to be used for RPC interaction
+        val rpcAddress = incrementalPortAllocation().nextHostAndPort()
+
+        // Create a specific RPC user
+        val rpcUser = User("MultiRpcClientTest", "MultiRpcClientTestPwd", setOf(Permissions.all()))
+
         driver(DriverParameters(notarySpecs = emptyList(), startNodesInProcess = true)) {
-            val alice = startNode(providedName = ALICE_NAME).getOrThrow()
+            val alice = startNode(providedName = ALICE_NAME, defaultParameters = NodeParameters(rpcAddress = rpcAddress, rpcUsers = listOf(rpcUser))).getOrThrow()
             alice.rpc.let { rpc ->
                 val handle = rpc.startFlow(::AFlowThatGetsMurderedWhenItTriesToSuspend)
                 AFlowThatGetsMurderedWhenItTriesToSuspend.lockA.acquire()
@@ -337,6 +350,7 @@ class KillFlowTest {
         @Suspendable
         override fun call() {
             lockA.release()
+            sleep(1.seconds)
             lockB.acquire()
             sleep(1.seconds)
         }

@@ -8,6 +8,7 @@ import net.corda.core.internal.FlowStateMachine
 import net.corda.core.internal.FlowStateMachineHandle
 import net.corda.core.messaging.DataFeed
 import net.corda.core.messaging.FlowHandleWithClientId
+import net.corda.core.messaging.RPCOps
 import net.corda.core.utilities.Try
 import net.corda.node.services.messaging.DeduplicationHandler
 import net.corda.node.services.messaging.ReceivedMessage
@@ -30,7 +31,7 @@ import rx.Observable
  * TODO: Surfacing of exceptions via an API and/or management UI
  * TODO: Don't store all active flows in memory, load from the database on demand.
  */
-interface StateMachineManager {
+interface StateMachineManager : LockingRpc {
 
     enum class StartMode {
         ExcludingPaused, // Resume all flows except paused flows.
@@ -120,6 +121,11 @@ interface StateMachineManager {
      * @return whether the mapping was removed.
      */
     fun removeClientId(clientId: String): Boolean
+}
+
+interface LockingRpc : RPCOps {
+    fun await(id: StateMachineRunId, status: Checkpoint.FlowStatus): CordaFuture<Checkpoint.FlowStatus>
+    fun release(id: StateMachineRunId): Boolean
 }
 
 // These must be idempotent! A later failure in the state transition may error the flow state, and a replay may call
