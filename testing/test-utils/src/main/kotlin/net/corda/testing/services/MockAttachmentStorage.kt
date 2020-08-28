@@ -37,7 +37,7 @@ class MockAttachmentStorage : AttachmentStorage, SingletonSerializeAsToken() {
     override fun importAttachment(jar: InputStream): AttachmentId = importAttachment(jar, UNKNOWN_UPLOADER, null)
 
     override fun importAttachment(jar: InputStream, uploader: String, filename: String?): AttachmentId {
-        return withContractsInJar(jar) { contractClassNames, inputStream ->
+        return withContractsInJar(jar, false) { contractClassNames, inputStream ->
             importAttachmentInternal(inputStream, uploader, contractClassNames)
         }
     }

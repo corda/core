@@ -19,11 +19,17 @@ class MigrationNamedCacheFactory(private val metricRegistry: MetricRegistry?,
     override fun bindWithMetrics(metricRegistry: MetricRegistry) = MigrationNamedCacheFactory(metricRegistry, this.nodeConfiguration)
     override fun bindWithConfig(nodeConfiguration: NodeConfiguration) = MigrationNamedCacheFactory(this.metricRegistry, nodeConfiguration)
 
+    private fun determineSchemaCacheSize(): Long {
+        var schemaCacheSize: Long = DatabaseConfig.Defaults.mappedSchemaCacheSize
+        if (nodeConfiguration?.lowMemoryMode != null && nodeConfiguration.lowMemoryMode) {
+            schemaCacheSize = DatabaseConfig.Defaults.mappedSchemaCacheSizeLowMemoryMode.coerceAtMost(nodeConfiguration.database.mappedSchemaCacheSize)
+        }
+        return schemaCacheSize
+    }
+
     private fun <K, V> configuredForNamed(caffeine: Caffeine<K, V>, name: String): Caffeine<K, V> {
         return when(name) {
-            "HibernateConfiguration_sessionFactories" -> caffeine.maximumSize(
-                    nodeConfiguration?.database?.mappedSchemaCacheSize ?: DatabaseConfig.Defaults.mappedSchemaCacheSize
-            )
+            "HibernateConfiguration_sessionFactories" -> caffeine.maximumSize(determineSchemaCacheSize())
             "DBTransactionStorage_transactions" -> caffeine.maximumWeight(
                     nodeConfiguration?.transactionCacheSizeBytes ?: NodeConfiguration.defaultTransactionCacheSize
             )

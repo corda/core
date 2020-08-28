@@ -71,7 +71,8 @@ class ReconnectingCordaRPCOps private constructor(
             gracefulReconnect: GracefulReconnect = GracefulReconnect(),
             sslConfiguration: ClientRpcSslOptions? = null,
             classLoader: ClassLoader? = null,
-            observersPool: ExecutorService
+            observersPool: ExecutorService,
+            lowMemoryMode: Boolean = false
     ) : this(ReconnectingRPCConnection(
             nodeHostAndPorts,
             username,
@@ -80,7 +81,8 @@ class ReconnectingCordaRPCOps private constructor(
             sslConfiguration,
             classLoader,
             gracefulReconnect,
-            observersPool))
+            observersPool,
+            lowMemoryMode))
     private companion object {
         private val log = contextLogger()
         private fun proxy(reconnectingRPCConnection: ReconnectingRPCConnection): InternalCordaRPCOps {
@@ -137,7 +139,8 @@ class ReconnectingCordaRPCOps private constructor(
             val sslConfiguration: ClientRpcSslOptions? = null,
             val classLoader: ClassLoader?,
             val gracefulReconnect: GracefulReconnect = GracefulReconnect(),
-            val observersPool: ExecutorService
+            val observersPool: ExecutorService,
+            val lowMemoryMode: Boolean = false
     ) : RPCConnection<CordaRPCOps> {
         private var currentRPCConnection: CordaRPCConnection? = null
         enum class CurrentState {
@@ -230,7 +233,8 @@ class ReconnectingCordaRPCOps private constructor(
                         attemptedAddress,
                         rpcConfiguration.copy(connectionMaxRetryInterval = retryInterval, maxReconnectAttempts = 1),
                         sslConfiguration,
-                        classLoader
+                        classLoader,
+                        lowMemoryMode
                 ).start(username, password).also {
                     // Check connection is truly operational before returning it.
                     require(it.proxy.nodeInfo().legalIdentitiesAndCerts.isNotEmpty()) {

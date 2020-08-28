@@ -78,6 +78,8 @@ class NetworkBootstrapperTest {
 
     private val contractsJars = hashMapOf<Path, TestContractsJar>()
 
+    private val contractsJarConverterWithAdditionalFlag: (Path, Boolean) -> TestContractsJar = { path: Path, _: Boolean -> contractsJars[path]!! }
+
     private val bootstrapper = NetworkBootstrapper(
             initSerEnv = false,
             embeddedCordaJar = {
@@ -93,7 +95,7 @@ class NetworkBootstrapperTest {
                     file
                 }
             },
-            contractsJarConverter = { contractsJars[it]!! }
+            contractsJarConverter = contractsJarConverterWithAdditionalFlag
     )
 
     private val aliceConfig = FakeNodeConfig(ALICE_NAME)

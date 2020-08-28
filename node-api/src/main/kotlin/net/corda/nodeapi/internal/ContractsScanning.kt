@@ -23,11 +23,11 @@ interface ContractsJar {
     fun scan(): List<ContractClassName>
 }
 
-class ContractsJarFile(private val file: Path) : ContractsJar {
+class ContractsJarFile(private val file: Path, private val lowMemoryMode: Boolean = false) : ContractsJar {
     override val hash: SecureHash by lazy(LazyThreadSafetyMode.NONE, file::hash)
 
     override fun scan(): List<ContractClassName> {
-        val scanResult = ClassGraph().overrideClasspath(singleton(file)).enableClassInfo().pooledScan()
+        val scanResult = ClassGraph().overrideClasspath(singleton(file)).setMaxBufferedJarRAMSize(if (lowMemoryMode) ClassGraphConstants.LOW_MEMORY_MODE_MAX_BUFFERED_JAR_SIZE else ClassGraphConstants.DEFAULT_MAX_BUFFERED_JAR_SIZE).enableClassInfo().pooledScan()
 
         return scanResult.use { result ->
             coreContractClasses
@@ -42,7 +42,7 @@ class ContractsJarFile(private val file: Path) : ContractsJar {
 
 private val logger = LoggerFactory.getLogger("ClassloaderUtils")
 
-fun <T> withContractsInJar(jarInputStream: InputStream, withContracts: (List<ContractClassName>, InputStream) -> T): T {
+fun <T> withContractsInJar(jarInputStream: InputStream, lowMemoryMode: Boolean, withContracts: (List<ContractClassName>, InputStream) -> T): T {
     val tempFile = Files.createTempFile("attachment", ".jar")
     try {
         jarInputStream.use {
@@ -50,7 +50,7 @@ fun <T> withContractsInJar(jarInputStream: InputStream, withContracts: (List<Con
         }
         val cordappJar = tempFile.toAbsolutePath()
         val contracts = logElapsedTime("Contracts loading for '$cordappJar'", logger) {
-            ContractsJarFile(tempFile.toAbsolutePath()).scan()
+            ContractsJarFile(tempFile.toAbsolutePath(), lowMemoryMode).scan()
         }
         return tempFile.read { withContracts(contracts, it) }
     } finally {

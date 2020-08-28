@@ -51,6 +51,7 @@ data class DatabaseConfig(
         val transactionIsolationLevel = TransactionIsolationLevel.REPEATABLE_READ
         val exportHibernateJMXStatistics = false
         val mappedSchemaCacheSize = 100L
+        val mappedSchemaCacheSizeLowMemoryMode = 25L
     }
 }
 

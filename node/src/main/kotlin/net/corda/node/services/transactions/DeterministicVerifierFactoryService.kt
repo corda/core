@@ -30,7 +30,8 @@ interface VerifierFactoryService : UnaryOperator<LedgerTransaction>, AutoCloseab
 
 class DeterministicVerifierFactoryService(
     private val bootstrapSource: ApiSource,
-    private val cordaSource: UserSource
+    private val cordaSource: UserSource,
+    private val lowMemoryMode: Boolean = false
 ) : SingletonSerializeAsToken(), VerifierFactoryService {
     private val baseSandboxConfiguration: SandboxConfiguration
     private val cordappByteCodeCache = ConcurrentHashMap<ByteCodeKey, ByteCode>()
@@ -85,7 +86,7 @@ class DeterministicVerifierFactoryService(
 
     private fun specialise(ltx: LedgerTransaction, classLoader: ClassLoader): Verifier {
         return (classLoader as? URLClassLoader)?.run {
-            DeterministicVerifier(ltx, classLoader, createSandbox(classLoader.urLs))
+            DeterministicVerifier(ltx, classLoader, createSandbox(classLoader.urLs), lowMemoryMode)
         } ?: BasicVerifier(ltx, classLoader)
     }
 

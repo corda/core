@@ -98,17 +98,17 @@ class ArtemisTcpTransport {
         internal val acceptorFactoryClassName = "org.apache.activemq.artemis.core.remoting.impl.netty.NettyAcceptorFactory"
         internal val connectorFactoryClassName = NettyConnectorFactory::class.java.name
 
-        fun p2pAcceptorTcpTransport(hostAndPort: NetworkHostAndPort, config: MutualSslConfiguration?, enableSSL: Boolean = true): TransportConfiguration {
+        fun p2pAcceptorTcpTransport(hostAndPort: NetworkHostAndPort, config: MutualSslConfiguration?, enableSSL: Boolean = true, lowMemoryMode: Boolean = false): TransportConfiguration {
 
-            return p2pAcceptorTcpTransport(hostAndPort, config?.keyStore, config?.trustStore, enableSSL = enableSSL, useOpenSsl = config?.useOpenSsl ?: false)
+            return p2pAcceptorTcpTransport(hostAndPort, config?.keyStore, config?.trustStore, enableSSL = enableSSL, useOpenSsl = config?.useOpenSsl ?: false, lowMemoryMode = lowMemoryMode)
         }
 
-        fun p2pConnectorTcpTransport(hostAndPort: NetworkHostAndPort, config: MutualSslConfiguration?, enableSSL: Boolean = true, keyStoreProvider: String? = null): TransportConfiguration {
+        fun p2pConnectorTcpTransport(hostAndPort: NetworkHostAndPort, config: MutualSslConfiguration?, enableSSL: Boolean = true, keyStoreProvider: String? = null, lowMemoryMode: Boolean = false): TransportConfiguration {
 
-            return p2pConnectorTcpTransport(hostAndPort, config?.keyStore, config?.trustStore, enableSSL = enableSSL, useOpenSsl = config?.useOpenSsl ?: false, keyStoreProvider = keyStoreProvider)
+            return p2pConnectorTcpTransport(hostAndPort, config?.keyStore, config?.trustStore, enableSSL = enableSSL, useOpenSsl = config?.useOpenSsl ?: false, keyStoreProvider = keyStoreProvider, lowMemoryMode = lowMemoryMode)
         }
 
-        fun p2pAcceptorTcpTransport(hostAndPort: NetworkHostAndPort, keyStore: FileBasedCertificateStoreSupplier?, trustStore: FileBasedCertificateStoreSupplier?, enableSSL: Boolean = true, useOpenSsl: Boolean = false): TransportConfiguration {
+        fun p2pAcceptorTcpTransport(hostAndPort: NetworkHostAndPort, keyStore: FileBasedCertificateStoreSupplier?, trustStore: FileBasedCertificateStoreSupplier?, enableSSL: Boolean = true, useOpenSsl: Boolean = false, lowMemoryMode: Boolean = false): TransportConfiguration {
 
             val options = defaultArtemisOptions(hostAndPort).toMutableMap()
             if (enableSSL) {
@@ -117,11 +117,12 @@ class ArtemisTcpTransport {
                 options[TransportConstants.SSL_PROVIDER] = if (useOpenSsl) TransportConstants.OPENSSL_PROVIDER else TransportConstants.DEFAULT_SSL_PROVIDER
             }
             options[TransportConstants.HANDSHAKE_TIMEOUT] = 0 // Suppress core.server.lambda$channelActive$0 - AMQ224088 error from load balancer type connections
+            options[TransportConstants.REMOTING_THREADS_PROPNAME] = if (lowMemoryMode) ArtemisConstants.LOW_MEMORY_MODE_REMOTING_THREADS_NUMBER else ArtemisConstants.DEFAULT_REMOTING_THREADS_NUMBER_MULTIPLIER * Runtime.getRuntime().availableProcessors()
             return TransportConfiguration(acceptorFactoryClassName, options)
         }
 
         @Suppress("LongParameterList")
-        fun p2pConnectorTcpTransport(hostAndPort: NetworkHostAndPort, keyStore: FileBasedCertificateStoreSupplier?, trustStore: FileBasedCertificateStoreSupplier?, enableSSL: Boolean = true, useOpenSsl: Boolean = false, keyStoreProvider: String? = null): TransportConfiguration {
+        fun p2pConnectorTcpTransport(hostAndPort: NetworkHostAndPort, keyStore: FileBasedCertificateStoreSupplier?, trustStore: FileBasedCertificateStoreSupplier?, enableSSL: Boolean = true, useOpenSsl: Boolean = false, keyStoreProvider: String? = null, lowMemoryMode: Boolean = false): TransportConfiguration {
 
             val options = defaultArtemisOptions(hostAndPort).toMutableMap()
             if (enableSSL) {
@@ -130,14 +131,15 @@ class ArtemisTcpTransport {
                 options[TransportConstants.SSL_PROVIDER] = if (useOpenSsl) TransportConstants.OPENSSL_PROVIDER else TransportConstants.DEFAULT_SSL_PROVIDER
                 keyStoreProvider?.let { options.put(TransportConstants.KEYSTORE_PROVIDER_PROP_NAME, keyStoreProvider) }
             }
+            options[TransportConstants.REMOTING_THREADS_PROPNAME] = if (lowMemoryMode) ArtemisConstants.LOW_MEMORY_MODE_REMOTING_THREADS_NUMBER else ArtemisConstants.DEFAULT_REMOTING_THREADS_NUMBER_MULTIPLIER * Runtime.getRuntime().availableProcessors()
             return TransportConfiguration(connectorFactoryClassName, options)
         }
 
-        fun p2pConnectorTcpTransportFromList(hostAndPortList: List<NetworkHostAndPort>, config: MutualSslConfiguration?, enableSSL: Boolean = true, keyStoreProvider: String? = null): List<TransportConfiguration> = hostAndPortList.map {
-            p2pConnectorTcpTransport(it, config, enableSSL, keyStoreProvider)
+        fun p2pConnectorTcpTransportFromList(hostAndPortList: List<NetworkHostAndPort>, config: MutualSslConfiguration?, enableSSL: Boolean = true, keyStoreProvider: String? = null, lowMemoryMode: Boolean = false): List<TransportConfiguration> = hostAndPortList.map {
+            p2pConnectorTcpTransport(it, config, enableSSL, keyStoreProvider, lowMemoryMode)
         }
 
-        fun rpcAcceptorTcpTransport(hostAndPort: NetworkHostAndPort, config: BrokerRpcSslOptions?, enableSSL: Boolean = true): TransportConfiguration {
+        fun rpcAcceptorTcpTransport(hostAndPort: NetworkHostAndPort, config: BrokerRpcSslOptions?, enableSSL: Boolean = true, lowMemoryMode: Boolean = false): TransportConfiguration {
             val options = defaultArtemisOptions(hostAndPort).toMutableMap()
 
             if (config != null && enableSSL) {
@@ -146,10 +148,11 @@ class ArtemisTcpTransport {
                 options.putAll(defaultSSLOptions)
             }
             options[TransportConstants.HANDSHAKE_TIMEOUT] = 0 // Suppress core.server.lambda$channelActive$0 - AMQ224088 error from load balancer type connections
+            options[TransportConstants.REMOTING_THREADS_PROPNAME] = if (lowMemoryMode) ArtemisConstants.LOW_MEMORY_MODE_REMOTING_THREADS_NUMBER else ArtemisConstants.DEFAULT_REMOTING_THREADS_NUMBER_MULTIPLIER * Runtime.getRuntime().availableProcessors()
             return TransportConfiguration(acceptorFactoryClassName, options)
         }
 
-        fun rpcConnectorTcpTransport(hostAndPort: NetworkHostAndPort, config: ClientRpcSslOptions?, enableSSL: Boolean = true): TransportConfiguration {
+        fun rpcConnectorTcpTransport(hostAndPort: NetworkHostAndPort, config: ClientRpcSslOptions?, enableSSL: Boolean = true, lowMemoryMode: Boolean = false): TransportConfiguration {
             val options = defaultArtemisOptions(hostAndPort).toMutableMap()
 
             if (config != null && enableSSL) {
@@ -157,11 +160,12 @@ class ArtemisTcpTransport {
                 options.putAll(config.toTransportOptions())
                 options.putAll(defaultSSLOptions)
             }
+            options[TransportConstants.REMOTING_THREADS_PROPNAME] = if (lowMemoryMode) ArtemisConstants.LOW_MEMORY_MODE_REMOTING_THREADS_NUMBER else ArtemisConstants.DEFAULT_REMOTING_THREADS_NUMBER_MULTIPLIER * Runtime.getRuntime().availableProcessors()
             return TransportConfiguration(connectorFactoryClassName, options)
         }
 
-        fun rpcConnectorTcpTransportsFromList(hostAndPortList: List<NetworkHostAndPort>, config: ClientRpcSslOptions?, enableSSL: Boolean = true): List<TransportConfiguration> = hostAndPortList.map {
-            rpcConnectorTcpTransport(it, config, enableSSL)
+        fun rpcConnectorTcpTransportsFromList(hostAndPortList: List<NetworkHostAndPort>, config: ClientRpcSslOptions?, enableSSL: Boolean = true, lowMemoryMode: Boolean = false): List<TransportConfiguration> = hostAndPortList.map {
+            rpcConnectorTcpTransport(it, config, enableSSL, lowMemoryMode)
         }
 
         fun rpcInternalClientTcpTransport(hostAndPort: NetworkHostAndPort, config: SslConfiguration, keyStoreProvider: String? = null): TransportConfiguration {

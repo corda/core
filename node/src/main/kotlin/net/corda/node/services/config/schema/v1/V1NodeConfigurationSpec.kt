@@ -19,6 +19,7 @@ internal object V1NodeConfigurationSpec : Configuration.Specification<NodeConfig
     private val security by nested(SecurityConfigurationSpec).optional()
     private val devMode by boolean().optional().withDefaultValue(Defaults.devMode)
     private val devModeOptions by nested(DevModeOptionsSpec).optional()
+    private val lowMemoryMode by boolean().optional().withDefaultValue(Defaults.lowMemoryMode)
     private val compatibilityZoneURL by string().mapValid(::toURL).optional()
     private val networkServices by nested(NetworkServicesConfigSpec).optional()
     private val certificateChainCheckPolicies by nested(CertChainPolicyConfigSpec).list().optional().withDefaultValue(Defaults.certificateChainCheckPolicies)
@@ -102,6 +103,7 @@ internal object V1NodeConfigurationSpec : Configuration.Specification<NodeConfig
                     security = config[security],
                     devMode = config[devMode],
                     devModeOptions = config[devModeOptions],
+                    lowMemoryMode = config[lowMemoryMode],
                     compatibilityZoneURL = config[compatibilityZoneURL],
                     networkServices = config[networkServices],
                     certificateChainCheckPolicies = config[certificateChainCheckPolicies],

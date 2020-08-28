@@ -308,6 +308,7 @@ object AttachmentsClassLoaderBuilder {
                                               params: NetworkParameters,
                                               txId: SecureHash,
                                               isAttachmentTrusted: (Attachment) -> Boolean,
+                                              lowMemoryMode: Boolean = false,
                                               parent: ClassLoader = ClassLoader.getSystemClassLoader(),
                                               block: (ClassLoader) -> T): T {
         val attachmentIds = attachments.map(Attachment::id).toSet()
@@ -317,7 +318,7 @@ object AttachmentsClassLoaderBuilder {
             val transactionClassLoader = AttachmentsClassLoader(attachments, params, txId, isAttachmentTrusted, parent)
             val serializers = try {
                 createInstancesOfClassesImplementing(transactionClassLoader, SerializationCustomSerializer::class.java,
-                        JDK1_2_CLASS_FILE_FORMAT_MAJOR_VERSION..JDK8_CLASS_FILE_FORMAT_MAJOR_VERSION)
+                        JDK1_2_CLASS_FILE_FORMAT_MAJOR_VERSION..JDK8_CLASS_FILE_FORMAT_MAJOR_VERSION, lowMemoryMode)
                 }
                 catch(ex: UnsupportedClassVersionError) {
                     throw TransactionVerificationException.UnsupportedClassVersionError(txId, ex.message!!, ex)

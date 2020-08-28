@@ -5,6 +5,13 @@ import io.github.classgraph.ClassInfo
 import net.corda.core.StubOutForDJVM
 import net.corda.core.serialization.internal.AttachmentURLStreamHandlerFactory.attachmentScheme
 
+class ClassGraphConstants {
+    companion object {
+        const val DEFAULT_MAX_BUFFERED_JAR_SIZE = 64 * 1024 * 1024
+        const val LOW_MEMORY_MODE_MAX_BUFFERED_JAR_SIZE = 1024 * 1024
+    }
+}
+
 /**
  * Creates instances of all the classes in the classpath of the provided classloader, which implement the interface of the provided class.
  * @param classloader the classloader, which will be searched for the classes.
@@ -21,8 +28,8 @@ import net.corda.core.serialization.internal.AttachmentURLStreamHandlerFactory.a
  */
 @StubOutForDJVM
 fun <T: Any> createInstancesOfClassesImplementing(classloader: ClassLoader, clazz: Class<T>,
-                                                  classVersionRange: IntRange? = null): Set<T> {
-    return getNamesOfClassesImplementing(classloader, clazz, classVersionRange)
+                                                  classVersionRange: IntRange? = null, lowMemoryMode: Boolean = false): Set<T> {
+    return getNamesOfClassesImplementing(classloader, clazz, classVersionRange, lowMemoryMode)
         .map { classloader.loadClass(it).asSubclass(clazz) }
         .mapTo(LinkedHashSet()) { it.kotlin.objectOrNewInstance() }
 }
@@ -38,9 +45,10 @@ fun <T: Any> createInstancesOfClassesImplementing(classloader: ClassLoader, claz
  */
 @StubOutForDJVM
 fun <T: Any> getNamesOfClassesImplementing(classloader: ClassLoader, clazz: Class<T>,
-                                           classVersionRange: IntRange? = null): Set<String> {
+                                           classVersionRange: IntRange? = null, lowMemoryMode: Boolean): Set<String> {
     return ClassGraph().overrideClassLoaders(classloader)
         .enableURLScheme(attachmentScheme)
+        .setMaxBufferedJarRAMSize(if (lowMemoryMode) ClassGraphConstants.LOW_MEMORY_MODE_MAX_BUFFERED_JAR_SIZE else ClassGraphConstants.DEFAULT_MAX_BUFFERED_JAR_SIZE)
         .ignoreParentClassLoaders()
         .enableClassInfo()
         .pooledScan()

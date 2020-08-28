@@ -21,4 +21,5 @@ fun NodeConfiguration.toShellConfig() = ShellConfiguration(
         ssl = clientSslOptionsCompatibleWith(this.rpcOptions),
         sshdPort = this.sshd?.port,
         sshHostKeyDirectory = this.baseDirectory / SSHD_HOSTKEY_DIR,
-        noLocalShell = this.noLocalShell)
+        noLocalShell = this.noLocalShell,
+        lowMemoryMode = this.lowMemoryMode)

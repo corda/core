@@ -17,6 +17,7 @@ import net.corda.core.serialization.internal.nodeSerializationEnv
 import net.corda.core.utilities.NetworkHostAndPort
 import net.corda.core.utilities.contextLogger
 import net.corda.nodeapi.RPCApi
+import net.corda.nodeapi.internal.ArtemisConstants
 import net.corda.nodeapi.internal.ArtemisTcpTransport.Companion.rpcConnectorTcpTransport
 import net.corda.nodeapi.internal.ArtemisTcpTransport.Companion.rpcConnectorTcpTransportsFromList
 import net.corda.nodeapi.internal.ArtemisTcpTransport.Companion.rpcInternalClientTcpTransport
@@ -33,14 +34,16 @@ class RPCClient<I : RPCOps>(
         val transport: TransportConfiguration,
         val rpcConfiguration: CordaRPCClientConfiguration = CordaRPCClientConfiguration.DEFAULT,
         val serializationContext: SerializationContext = SerializationDefaults.RPC_CLIENT_CONTEXT,
-        val haPoolTransportConfigurations: List<TransportConfiguration> = emptyList()
+        val haPoolTransportConfigurations: List<TransportConfiguration> = emptyList(),
+        val lowMemoryMode: Boolean = false
 ) {
     constructor(
             hostAndPort: NetworkHostAndPort,
             sslConfiguration: ClientRpcSslOptions? = null,
             configuration: CordaRPCClientConfiguration = CordaRPCClientConfiguration.DEFAULT,
-            serializationContext: SerializationContext = SerializationDefaults.RPC_CLIENT_CONTEXT
-    ) : this(rpcConnectorTcpTransport(hostAndPort, sslConfiguration), configuration, serializationContext)
+            serializationContext: SerializationContext = SerializationDefaults.RPC_CLIENT_CONTEXT,
+            lowMemoryMode: Boolean = false
+    ) : this(rpcConnectorTcpTransport(hostAndPort, sslConfiguration, lowMemoryMode = lowMemoryMode), configuration, serializationContext)
 
     constructor(
             hostAndPort: NetworkHostAndPort,
@@ -53,9 +56,10 @@ class RPCClient<I : RPCOps>(
             haAddressPool: List<NetworkHostAndPort>,
             sslConfiguration: ClientRpcSslOptions? = null,
             configuration: CordaRPCClientConfiguration = CordaRPCClientConfiguration.DEFAULT,
-            serializationContext: SerializationContext = SerializationDefaults.RPC_CLIENT_CONTEXT
-    ) : this(rpcConnectorTcpTransport(haAddressPool.first(), sslConfiguration),
-            configuration, serializationContext, rpcConnectorTcpTransportsFromList(haAddressPool, sslConfiguration))
+            serializationContext: SerializationContext = SerializationDefaults.RPC_CLIENT_CONTEXT,
+            lowMemoryMode: Boolean = false
+    ) : this(rpcConnectorTcpTransport(haAddressPool.first(), sslConfiguration, lowMemoryMode = lowMemoryMode),
+            configuration, serializationContext, rpcConnectorTcpTransportsFromList(haAddressPool, sslConfiguration, lowMemoryMode = lowMemoryMode), lowMemoryMode)
 
     companion object {
         private val log = contextLogger()
@@ -85,6 +89,7 @@ class RPCClient<I : RPCOps>(
                 reconnectAttempts = if (haPoolTransportConfigurations.isEmpty()) rpcConfiguration.maxReconnectAttempts else 0
                 minLargeMessageSize = rpcConfiguration.maxFileSize
                 isUseGlobalPools = nodeSerializationEnv != null
+                threadPoolMaxSize = if (lowMemoryMode) ArtemisConstants.LOW_MEMORY_MODE_THREAD_POOL_MAX_SIZE else ArtemisConstants.DEFAULT_THREAD_POOL_MAX_SIZE
             }
             val sessionId = Trace.SessionId.newInstance()
             val proxyHandler = RPCClientProxyHandler(rpcConfiguration, username, password, serverLocator, clientAddress,

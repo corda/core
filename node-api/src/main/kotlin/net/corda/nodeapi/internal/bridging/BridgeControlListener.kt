@@ -62,7 +62,8 @@ class BridgeControlListener(private val keyStore: CertificateStore,
                 maxMessageSize: Int,
                 revocationConfig: RevocationConfig,
                 enableSNI: Boolean,
-                proxy: ProxyConfig? = null) : this(config.keyStore.get(), config.trustStore.get(), config.useOpenSsl, proxy, maxMessageSize, revocationConfig, enableSNI, { ArtemisMessagingClient(config, p2pAddress, maxMessageSize) })
+                proxy: ProxyConfig? = null,
+                lowMemoryMode: Boolean = false) : this(config.keyStore.get(), config.trustStore.get(), config.useOpenSsl, proxy, maxMessageSize, revocationConfig, enableSNI, { ArtemisMessagingClient(config, p2pAddress, maxMessageSize, lowMemoryMode = lowMemoryMode) })
 
     companion object {
         private val log = contextLogger()

@@ -25,7 +25,8 @@ class ArtemisMessagingClient(private val config: MutualSslConfiguration,
                              private val confirmationWindowSize: Int = -1,
                              private val messagingServerConnectionConfig: MessagingServerConnectionConfiguration? = null,
                              private val backupServerAddressPool: List<NetworkHostAndPort> = emptyList(),
-                             private val failoverCallback: ((FailoverEventType) -> Unit)? = null
+                             private val failoverCallback: ((FailoverEventType) -> Unit)? = null,
+                             private val lowMemoryMode: Boolean = false
 )  : ArtemisSessionProvider {
     companion object {
         private val log = loggerFor<ArtemisMessagingClient>()
@@ -40,8 +41,8 @@ class ArtemisMessagingClient(private val config: MutualSslConfiguration,
 
     override fun start(): Started = synchronized(this) {
         check(started == null) { "start can't be called twice" }
-        val tcpTransport = p2pConnectorTcpTransport(serverAddress, config)
-        val backupTransports = p2pConnectorTcpTransportFromList(backupServerAddressPool, config)
+        val tcpTransport = p2pConnectorTcpTransport(serverAddress, config, lowMemoryMode = lowMemoryMode)
+        val backupTransports = p2pConnectorTcpTransportFromList(backupServerAddressPool, config, lowMemoryMode = lowMemoryMode)
 
         log.info("Connecting to message broker: $serverAddress")
         if (backupTransports.isNotEmpty()) {
@@ -69,6 +70,7 @@ class ArtemisMessagingClient(private val config: MutualSslConfiguration,
                 isFailoverOnInitialConnection = messagingServerConnectionConfig.failoverOnInitialAttempt(isHA)
                 initialConnectAttempts = messagingServerConnectionConfig.initialConnectAttempts(isHA)
             }
+            threadPoolMaxSize = if (lowMemoryMode) ArtemisConstants.LOW_MEMORY_MODE_THREAD_POOL_MAX_SIZE else ArtemisConstants.DEFAULT_THREAD_POOL_MAX_SIZE
             addIncomingInterceptor(ArtemisMessageSizeChecksInterceptor(maxMessageSize))
         }
         val sessionFactory = locator.createSessionFactory()

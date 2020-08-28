@@ -47,7 +47,8 @@ import kotlin.streams.toList
 class JarScanningCordappLoader private constructor(private val cordappJarPaths: List<RestrictedURL>,
                                                    private val versionInfo: VersionInfo = VersionInfo.UNKNOWN,
                                                    extraCordapps: List<CordappImpl>,
-                                                   private val signerKeyFingerprintBlacklist: List<SecureHash.SHA256> = emptyList()) : CordappLoaderTemplate() {
+                                                   private val signerKeyFingerprintBlacklist: List<SecureHash.SHA256> = emptyList(),
+                                                   private val lowMemoryMode: Boolean = false) : CordappLoaderTemplate() {
     init {
         if (cordappJarPaths.isEmpty()) {
             logger.info("No CorDapp paths provided")
@@ -73,10 +74,11 @@ class JarScanningCordappLoader private constructor(private val cordappJarPaths: 
         fun fromDirectories(cordappDirs: Collection<Path>,
                             versionInfo: VersionInfo = VersionInfo.UNKNOWN,
                             extraCordapps: List<CordappImpl> = emptyList(),
-                            signerKeyFingerprintBlacklist: List<SecureHash.SHA256> = emptyList()): JarScanningCordappLoader {
+                            signerKeyFingerprintBlacklist: List<SecureHash.SHA256> = emptyList(),
+                            lowMemoryMode: Boolean = false): JarScanningCordappLoader {
             logger.info("Looking for CorDapps in ${cordappDirs.distinct().joinToString(", ", "[", "]")}")
             val paths = cordappDirs.distinct().flatMap(this::jarUrlsInDirectory).map { it.restricted() }
-            return JarScanningCordappLoader(paths, versionInfo, extraCordapps, signerKeyFingerprintBlacklist)
+            return JarScanningCordappLoader(paths, versionInfo, extraCordapps, signerKeyFingerprintBlacklist, lowMemoryMode)
         }
 
         /**
@@ -332,6 +334,7 @@ class JarScanningCordappLoader private constructor(private val cordappJarPaths: 
         logger.info("Scanning CorDapp in $cordappElement")
         val scanResult = ClassGraph()
             .filterClasspathElements { elt -> elt == cordappElement }
+            .setMaxBufferedJarRAMSize(if (lowMemoryMode) ClassGraphConstants.LOW_MEMORY_MODE_MAX_BUFFERED_JAR_SIZE else ClassGraphConstants.DEFAULT_MAX_BUFFERED_JAR_SIZE)
             .overrideClassLoaders(appClassLoader)
             .ignoreParentClassLoaders()
             .enableAllInfo()

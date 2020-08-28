@@ -53,6 +53,7 @@ data class NodeConfigurationImpl(
         @Deprecated("Do not configure")
         override val certificateChainCheckPolicies: List<CertChainPolicyConfig> = Defaults.certificateChainCheckPolicies,
         override val devMode: Boolean = Defaults.devMode,
+        override val lowMemoryMode: Boolean = Defaults.lowMemoryMode,
         override val noLocalShell: Boolean = Defaults.noLocalShell,
         override val devModeOptions: DevModeOptions? = Defaults.devModeOptions,
         override val useTestClock: Boolean = Defaults.useTestClock,
@@ -99,6 +100,7 @@ data class NodeConfigurationImpl(
         @Suppress("DEPRECATION")
         val certificateChainCheckPolicies: List<CertChainPolicyConfig> = emptyList()
         const val devMode: Boolean = false
+        const val lowMemoryMode: Boolean = false
         const val noLocalShell: Boolean = false
         val devModeOptions: DevModeOptions? = null
         const val useTestClock: Boolean = false

@@ -28,7 +28,8 @@ import kotlin.collections.LinkedHashSet
 class DeterministicVerifier(
     ltx: LedgerTransaction,
     transactionClassLoader: ClassLoader,
-    private val sandboxConfiguration: SandboxConfiguration
+    private val sandboxConfiguration: SandboxConfiguration,
+    private val lowMemoryMode: Boolean = false
 ) : Verifier(ltx, transactionClassLoader) {
     /**
      * Read the whitelisted classes without using the [java.util.ServiceLoader] mechanism
@@ -48,7 +49,7 @@ class DeterministicVerifier(
     }
 
     override fun verifyContracts() {
-        val customSerializerNames = getNamesOfClassesImplementing(transactionClassLoader, SerializationCustomSerializer::class.java)
+        val customSerializerNames = getNamesOfClassesImplementing(transactionClassLoader, SerializationCustomSerializer::class.java, lowMemoryMode = lowMemoryMode)
         val serializationWhitelistNames = getSerializationWhitelistNames(transactionClassLoader)
         val result = IsolatedTask(ltx.id.toString(), sandboxConfiguration).run<Any>(Function { classLoader ->
             (classLoader.parent as? SandboxClassLoader)?.apply {

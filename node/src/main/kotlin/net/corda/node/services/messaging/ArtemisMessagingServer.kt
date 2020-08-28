@@ -12,6 +12,7 @@ import net.corda.node.internal.artemis.BrokerJaasLoginModule.Companion.NODE_P2P_
 import net.corda.node.internal.artemis.BrokerJaasLoginModule.Companion.PEER_ROLE
 import net.corda.node.services.config.NodeConfiguration
 import net.corda.nodeapi.internal.AmqpMessageSizeChecksInterceptor
+import net.corda.nodeapi.internal.ArtemisConstants
 import net.corda.nodeapi.internal.ArtemisMessageSizeChecksInterceptor
 import net.corda.nodeapi.internal.ArtemisMessagingComponent.Companion.INTERNAL_PREFIX
 import net.corda.nodeapi.internal.ArtemisMessagingComponent.Companion.JOURNAL_HEADER_SIZE
@@ -55,7 +56,8 @@ import javax.security.auth.login.AppConfigurationEntry.LoginModuleControlFlag.RE
 class ArtemisMessagingServer(private val config: NodeConfiguration,
                              private val messagingServerAddress: NetworkHostAndPort,
                              private val maxMessageSize: Int,
-                             private val journalBufferTimeout : Int?) : ArtemisBroker, SingletonSerializeAsToken() {
+                             private val journalBufferTimeout : Int?,
+                             private val lowMemoryMode: Boolean = false) : ArtemisBroker, SingletonSerializeAsToken() {
     companion object {
         private val log = contextLogger()
     }
@@ -131,10 +133,10 @@ class ArtemisMessagingServer(private val config: NodeConfiguration,
         // The transaction cache is configurable, and drives other cache sizes.
         globalMaxSize = max(config.transactionCacheSizeBytes, 10L * maxMessageSize)
 
-        acceptorConfigurations = mutableSetOf(p2pAcceptorTcpTransport(NetworkHostAndPort(messagingServerAddress.host, messagingServerAddress.port), config.p2pSslOptions))
+        acceptorConfigurations = mutableSetOf(p2pAcceptorTcpTransport(NetworkHostAndPort(messagingServerAddress.host, messagingServerAddress.port), config.p2pSslOptions, lowMemoryMode = lowMemoryMode))
         // Enable built in message deduplication. Note we still have to do our own as the delayed commits
         // and our own definition of commit mean that the built in deduplication cannot remove all duplicates.
-        idCacheSize = 2000 // Artemis Default duplicate cache size i.e. a guess
+        idCacheSize = if (lowMemoryMode) ArtemisConstants.LOW_MEMORY_MODE_ID_CACHE_SIZE else ArtemisConstants.DEFAULT_ID_CACHE_SIZE // Artemis Default duplicate cache size i.e. a guess
         isPersistIDCache = true
         isPopulateValidatedUser = true
         journalBufferSize_NIO = maxMessageSize + JOURNAL_HEADER_SIZE // Artemis default is 490KiB - required to address IllegalArgumentException (when Artemis uses Java NIO): Record is too large to store.

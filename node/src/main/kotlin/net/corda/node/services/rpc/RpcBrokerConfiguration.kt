@@ -7,6 +7,7 @@ import net.corda.node.internal.artemis.SecureArtemisConfiguration
 import net.corda.node.services.config.shell.INTERNAL_SHELL_USER
 import net.corda.nodeapi.BrokerRpcSslOptions
 import net.corda.nodeapi.RPCApi
+import net.corda.nodeapi.internal.ArtemisConstants
 import net.corda.nodeapi.internal.ArtemisMessagingComponent
 import net.corda.nodeapi.internal.ArtemisTcpTransport.Companion.rpcAcceptorTcpTransport
 import net.corda.nodeapi.internal.ArtemisTcpTransport.Companion.rpcInternalAcceptorTcpTransport
@@ -21,7 +22,7 @@ import java.nio.file.Path
 
 internal class RpcBrokerConfiguration(baseDirectory: Path, maxMessageSize: Int, journalBufferTimeout: Int?, jmxEnabled: Boolean,
                                       address: NetworkHostAndPort, adminAddress: NetworkHostAndPort?, sslOptions: BrokerRpcSslOptions?,
-                                      useSsl: Boolean, nodeConfiguration: MutualSslConfiguration, shouldStartLocalShell: Boolean) : SecureArtemisConfiguration() {
+                                      useSsl: Boolean, nodeConfiguration: MutualSslConfiguration, shouldStartLocalShell: Boolean, val lowMemoryMode: Boolean = false) : SecureArtemisConfiguration() {
     val loginListener: (String) -> Unit
 
     init {
@@ -30,7 +31,7 @@ internal class RpcBrokerConfiguration(baseDirectory: Path, maxMessageSize: Int, 
         setDirectories(baseDirectory)
 
         val acceptorConfigurationsSet = mutableSetOf(
-                rpcAcceptorTcpTransport(address, sslOptions, useSsl)
+                rpcAcceptorTcpTransport(address, sslOptions, useSsl, lowMemoryMode)
         )
         adminAddress?.let {
             acceptorConfigurationsSet += rpcInternalAcceptorTcpTransport(it, nodeConfiguration)
@@ -87,7 +88,7 @@ internal class RpcBrokerConfiguration(baseDirectory: Path, maxMessageSize: Int, 
     private fun initialiseSettings(maxMessageSize: Int, journalBufferTimeout: Int?) {
         // Enable built in message deduplication. Note we still have to do our own as the delayed commits
         // and our own definition of commit mean that the built in deduplication cannot remove all duplicates.
-        idCacheSize = 2000 // Artemis Default duplicate cache size i.e. a guess
+        idCacheSize = if (lowMemoryMode) ArtemisConstants.LOW_MEMORY_MODE_ID_CACHE_SIZE else ArtemisConstants.DEFAULT_ID_CACHE_SIZE // Artemis Default duplicate cache size i.e. a guess
         isPersistIDCache = true
         isPopulateValidatedUser = true
         journalBufferSize_NIO = maxMessageSize // Artemis default is 490KiB - required to address IllegalArgumentException (when Artemis uses Java NIO): Record is too large to store.

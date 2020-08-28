@@ -31,23 +31,24 @@ class ArtemisRpcBroker internal constructor(
         private val jmxEnabled: Boolean = false,
         private val baseDirectory: Path,
         private val nodeConfiguration: MutualSslConfiguration,
-        private val shouldStartLocalShell: Boolean) : ArtemisBroker {
+        private val shouldStartLocalShell: Boolean,
+        private val lowMemoryMode: Boolean = false) : ArtemisBroker {
 
     companion object {
         private val logger = loggerFor<ArtemisRpcBroker>()
 
         fun withSsl(configuration: MutualSslConfiguration, address: NetworkHostAndPort, adminAddress: NetworkHostAndPort,
                     sslOptions: BrokerRpcSslOptions, securityManager: RPCSecurityManager, maxMessageSize: Int,
-                    journalBufferTimeout: Int?, jmxEnabled: Boolean, baseDirectory: Path, shouldStartLocalShell: Boolean): ArtemisBroker {
+                    journalBufferTimeout: Int?, jmxEnabled: Boolean, baseDirectory: Path, shouldStartLocalShell: Boolean, lowMemoryMode: Boolean = false): ArtemisBroker {
             return ArtemisRpcBroker(address, adminAddress, sslOptions, true, securityManager, maxMessageSize, journalBufferTimeout,
-                    jmxEnabled, baseDirectory, configuration, shouldStartLocalShell)
+                    jmxEnabled, baseDirectory, configuration, shouldStartLocalShell, lowMemoryMode)
         }
 
         fun withoutSsl(configuration: MutualSslConfiguration, address: NetworkHostAndPort, adminAddress: NetworkHostAndPort,
                        securityManager: RPCSecurityManager, maxMessageSize: Int, journalBufferTimeout: Int?, jmxEnabled: Boolean,
-                       baseDirectory: Path, shouldStartLocalShell: Boolean): ArtemisBroker {
+                       baseDirectory: Path, shouldStartLocalShell: Boolean, lowMemoryMode: Boolean = false): ArtemisBroker {
             return ArtemisRpcBroker(address, adminAddress, null, false, securityManager, maxMessageSize, journalBufferTimeout,
-                    jmxEnabled, baseDirectory, configuration, shouldStartLocalShell)
+                    jmxEnabled, baseDirectory, configuration, shouldStartLocalShell, lowMemoryMode)
         }
     }
 
@@ -86,7 +87,7 @@ class ArtemisRpcBroker internal constructor(
 
     private fun initialiseServer(): ActiveMQServer {
         val serverConfiguration = RpcBrokerConfiguration(baseDirectory, maxMessageSize, journalBufferTimeout, jmxEnabled,
-                addresses.primary, adminAddressOptional, sslOptions, useSsl, nodeConfiguration, shouldStartLocalShell)
+                addresses.primary, adminAddressOptional, sslOptions, useSsl, nodeConfiguration, shouldStartLocalShell, lowMemoryMode)
         val serverSecurityManager = createArtemisSecurityManager(serverConfiguration.loginListener)
 
         return ActiveMQServerImpl(serverConfiguration, serverSecurityManager).apply {

@@ -117,7 +117,8 @@ object InteractiveShell {
                 CordaRPCClient(
                         configuration.hostAndPort,
                         configuration.ssl,
-                        classLoader
+                        classLoader,
+                        configuration.lowMemoryMode
                 ).start(username, password, gracefulReconnect = GracefulReconnect())
             } else {
                 CordaRPCClient(
@@ -126,7 +127,8 @@ object InteractiveShell {
                                 maxReconnectAttempts = 1
                         ),
                         sslConfiguration = configuration.ssl,
-                        classLoader = classLoader
+                        classLoader = classLoader,
+                        lowMemoryMode = configuration.lowMemoryMode
                 ).start(username, password)
             }
             rpcConn = connection

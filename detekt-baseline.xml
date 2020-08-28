@@ -171,6 +171,7 @@
     <ID>ComplexMethod:ObjectDiffer.kt$ObjectDiffer$fun diff(a: Any?, b: Any?): DiffTree?</ID>
     <ID>ComplexMethod:Obligation.kt$Obligation$override fun verify(tx: LedgerTransaction)</ID>
     <ID>ComplexMethod:QuasarInstrumentationHook.kt$QuasarInstrumentationHookAgent.Companion$@JvmStatic fun premain(argumentsString: String?, instrumentation: Instrumentation)</ID>
+    <ID>ComplexMethod:RPCClient.kt$RPCClient$fun start( rpcOpsClass: Class&lt;I>, username: String, password: String, externalTrace: Trace? = null, impersonatedActor: Actor? = null, targetLegalIdentity: CordaX500Name? = null ): RPCConnection&lt;I></ID>
     <ID>ComplexMethod:RPCClientProxyHandler.kt$RPCClientProxyHandler$ private fun close(notify: Boolean = true)</ID>
     <ID>ComplexMethod:RPCClientProxyHandler.kt$RPCClientProxyHandler$// The handler for Artemis messages. private fun artemisMessageHandler(message: ClientMessage)</ID>
     <ID>ComplexMethod:RPCClientProxyHandler.kt$RPCClientProxyHandler$// This is the general function that transforms a client side RPC to internal Artemis messages. override fun invoke(proxy: Any, method: Method, arguments: Array&lt;out Any?&gt;?): Any?</ID>
@@ -631,10 +632,11 @@
     <ID>LongParameterList:AbstractNode.kt$(databaseConfig: DatabaseConfig, wellKnownPartyFromX500Name: (CordaX500Name) -&gt; Party?, wellKnownPartyFromAnonymous: (AbstractParty) -&gt; Party?, schemaService: SchemaService, hikariProperties: Properties, cacheFactory: NamedCacheFactory, customClassLoader: ClassLoader?)</ID>
     <ID>LongParameterList:AbstractNode.kt$(hikariProperties: Properties, databaseConfig: DatabaseConfig, schemas: Set&lt;MappedSchema&gt;, metricRegistry: MetricRegistry? = null, cordappLoader: CordappLoader? = null, currentDir: Path? = null, ourName: CordaX500Name)</ID>
     <ID>LongParameterList:ArtemisMessagingServer.kt$ArtemisMessagingServer$(name: String, send: Boolean = false, consume: Boolean = false, createDurableQueue: Boolean = false, deleteDurableQueue: Boolean = false, createNonDurableQueue: Boolean = false, deleteNonDurableQueue: Boolean = false, manage: Boolean = false, browse: Boolean = false)</ID>
-    <ID>LongParameterList:ArtemisRpcBroker.kt$ArtemisRpcBroker.Companion$(configuration: MutualSslConfiguration, address: NetworkHostAndPort, adminAddress: NetworkHostAndPort, securityManager: RPCSecurityManager, maxMessageSize: Int, journalBufferTimeout: Int?, jmxEnabled: Boolean, baseDirectory: Path, shouldStartLocalShell: Boolean)</ID>
-    <ID>LongParameterList:ArtemisRpcBroker.kt$ArtemisRpcBroker.Companion$(configuration: MutualSslConfiguration, address: NetworkHostAndPort, adminAddress: NetworkHostAndPort, sslOptions: BrokerRpcSslOptions, securityManager: RPCSecurityManager, maxMessageSize: Int, journalBufferTimeout: Int?, jmxEnabled: Boolean, baseDirectory: Path, shouldStartLocalShell: Boolean)</ID>
+    <ID>LongParameterList:ArtemisRpcBroker.kt$ArtemisRpcBroker.Companion$(configuration: MutualSslConfiguration, address: NetworkHostAndPort, adminAddress: NetworkHostAndPort, securityManager: RPCSecurityManager, maxMessageSize: Int, journalBufferTimeout: Int?, jmxEnabled: Boolean, baseDirectory: Path, shouldStartLocalShell: Boolean, lowMemoryMode: Boolean = false)</ID>
+    <ID>LongParameterList:ArtemisRpcBroker.kt$ArtemisRpcBroker.Companion$(configuration: MutualSslConfiguration, address: NetworkHostAndPort, adminAddress: NetworkHostAndPort, sslOptions: BrokerRpcSslOptions, securityManager: RPCSecurityManager, maxMessageSize: Int, journalBufferTimeout: Int?, jmxEnabled: Boolean, baseDirectory: Path, shouldStartLocalShell: Boolean, lowMemoryMode: Boolean = false)</ID>
     <ID>LongParameterList:ArtemisRpcTests.kt$ArtemisRpcTests$(nodeSSlconfig: MutualSslConfiguration, brokerSslOptions: BrokerRpcSslOptions?, useSslForBroker: Boolean, clientSslOptions: ClientRpcSslOptions?, address: NetworkHostAndPort = ports.nextHostAndPort(), adminAddress: NetworkHostAndPort = ports.nextHostAndPort(), baseDirectory: Path = tempFolder.root.toPath() )</ID>
-    <ID>LongParameterList:AttachmentsClassLoader.kt$AttachmentsClassLoaderBuilder$(attachments: List&lt;Attachment&gt;, params: NetworkParameters, txId: SecureHash, isAttachmentTrusted: (Attachment) -&gt; Boolean, parent: ClassLoader = ClassLoader.getSystemClassLoader(), block: (ClassLoader) -&gt; T)</ID>
+    <ID>LongParameterList:ArtemisTcpTransport.kt$ArtemisTcpTransport.Companion$(hostAndPort: NetworkHostAndPort, keyStore: FileBasedCertificateStoreSupplier?, trustStore: FileBasedCertificateStoreSupplier?, enableSSL: Boolean = true, useOpenSsl: Boolean = false, lowMemoryMode: Boolean = false)</ID>
+    <ID>LongParameterList:AttachmentsClassLoader.kt$AttachmentsClassLoaderBuilder$(attachments: List&lt;Attachment&gt;, params: NetworkParameters, txId: SecureHash, isAttachmentTrusted: (Attachment) -&gt; Boolean, lowMemoryMode: Boolean = false, parent: ClassLoader = ClassLoader.getSystemClassLoader(), block: (ClassLoader) -&gt; T)</ID>
     <ID>LongParameterList:BFTSmart.kt$BFTSmart.Replica$( states: List&lt;StateRef&gt;, txId: SecureHash, callerName: CordaX500Name, requestSignature: NotarisationRequestSignature, timeWindow: TimeWindow?, references: List&lt;StateRef&gt; = emptyList() )</ID>
     <ID>LongParameterList:BusinessCalendar.kt$BusinessCalendar.Companion$(startDate: LocalDate, period: Frequency, calendar: BusinessCalendar = EMPTY, dateRollConvention: DateRollConvention = DateRollConvention.Following, noOfAdditionalPeriods: Int = Integer.MAX_VALUE, endDate: LocalDate? = null, periodOffset: Int? = null)</ID>
     <ID>LongParameterList:Cash.kt$Cash$(inputs: List&lt;State&gt;, outputs: List&lt;State&gt;, tx: LedgerTransaction, issueCommand: CommandWithParties&lt;Commands.Issue&gt;, currency: Currency, issuer: PartyAndReference)</ID>
@@ -652,7 +654,7 @@
     <ID>LongParameterList:ContractUpgradeTransactions.kt$ContractUpgradeLedgerTransaction.Companion$( inputs: List&lt;StateAndRef&lt;ContractState&gt;&gt;, notary: Party, legacyContractAttachment: Attachment, upgradedContractAttachment: Attachment, id: SecureHash, privacySalt: PrivacySalt, sigs: List&lt;TransactionSignature&gt;, networkParameters: NetworkParameters, upgradedContract: UpgradedContract&lt;ContractState, *&gt; )</ID>
     <ID>LongParameterList:CordaRPCClient.kt$CordaRPCClient$( username: String, password: String, externalTrace: Trace?, impersonatedActor: Actor?, targetLegalIdentity: CordaX500Name?, gracefulReconnect: GracefulReconnect? = null )</ID>
     <ID>LongParameterList:CordaRPCClient.kt$CordaRPCClientConfiguration$( connectionMaxRetryInterval: Duration = this.connectionMaxRetryInterval, minimumServerProtocolVersion: Int = this.minimumServerProtocolVersion, trackRpcCallSites: Boolean = this.trackRpcCallSites, reapInterval: Duration = this.reapInterval, observationExecutorPoolSize: Int = this.observationExecutorPoolSize, cacheConcurrencyLevel: Int = this.cacheConcurrencyLevel, connectionRetryInterval: Duration = this.connectionRetryInterval, connectionRetryIntervalMultiplier: Double = this.connectionRetryIntervalMultiplier, maxReconnectAttempts: Int = this.maxReconnectAttempts, maxFileSize: Int = this.maxFileSize, deduplicationCacheExpiry: Duration = this.deduplicationCacheExpiry )</ID>
-    <ID>LongParameterList:CordaRPCClient.kt$CordaRPCConnection.Companion$( username: String, password: String, addresses: List&lt;NetworkHostAndPort&gt;, rpcConfiguration: CordaRPCClientConfiguration, gracefulReconnect: GracefulReconnect, sslConfiguration: ClientRpcSslOptions? = null, classLoader: ClassLoader? = null )</ID>
+    <ID>LongParameterList:CordaRPCClient.kt$CordaRPCConnection.Companion$( username: String, password: String, addresses: List&lt;NetworkHostAndPort&gt;, rpcConfiguration: CordaRPCClientConfiguration, gracefulReconnect: GracefulReconnect, sslConfiguration: ClientRpcSslOptions? = null, classLoader: ClassLoader? = null, lowMemoryMode: Boolean = false )</ID>
     <ID>LongParameterList:CordaRPCOps.kt$( @Suppress("UNUSED_PARAMETER") flowConstructor: (A, B, C, D, E) -&gt; R, arg0: A, arg1: B, arg2: C, arg3: D, arg4: E )</ID>
     <ID>LongParameterList:CordaRPCOps.kt$( @Suppress("UNUSED_PARAMETER") flowConstructor: (A, B, C, D, E, F) -&gt; R, arg0: A, arg1: B, arg2: C, arg3: D, arg4: E, arg5: F )</ID>
     <ID>LongParameterList:CordaRPCOps.kt$( @Suppress("unused_parameter") flowConstructor: (A, B, C, D, E) -&gt; R, arg0: A, arg1: B, arg2: C, arg3: D, arg4: E )</ID>
@@ -789,6 +791,7 @@
     <ID>MagicNumber:ConnectionStateMachine.kt$ConnectionStateMachine$1500</ID>
     <ID>MagicNumber:ConnectionStateMachine.kt$ConnectionStateMachine$4</ID>
     <ID>MagicNumber:CordaPersistence.kt$DatabaseConfig.Defaults$100L</ID>
+    <ID>MagicNumber:CordaPersistence.kt$DatabaseConfig.Defaults$25L</ID>
     <ID>MagicNumber:CordaRPCClient.kt$CordaRPCClient$128</ID>
     <ID>MagicNumber:CordaRPCClient.kt$CordaRPCClientConfiguration$3</ID>
     <ID>MagicNumber:CordaRPCClient.kt$CordaRPCClientConfiguration$5</ID>
@@ -1004,6 +1007,8 @@
     <ID>MagicNumber:NodeConfiguration.kt$NodeConfiguration$5</ID>
     <ID>MagicNumber:NodeConfiguration.kt$NodeConfiguration.Companion$20</ID>
     <ID>MagicNumber:NodeConfiguration.kt$NodeConfiguration.Companion$300</ID>
+    <ID>MagicNumber:NodeConfiguration.kt$NodeConfiguration.Companion$40</ID>
+    <ID>MagicNumber:NodeConfiguration.kt$NodeConfiguration.Companion$400</ID>
     <ID>MagicNumber:NodeConfigurationImpl.kt$NodeConfigurationImpl.Defaults$5</ID>
     <ID>MagicNumber:NodeInfo.kt$NodeInfoSigner$4</ID>
     <ID>MagicNumber:NodeInfoWatcher.kt$NodeInfoWatcher$5</ID>
@@ -1228,6 +1233,7 @@
     <ID>MatchingDeclarationName:TutorialFlowStateMachines.kt$net.corda.docs.kotlin.tutorial.flowstatemachines.TutorialFlowStateMachines.kt</ID>
     <ID>MatchingDeclarationName:Utils.kt$io.cryptoblk.core.Utils.kt</ID>
     <ID>MatchingDeclarationName:VirtualCordapps.kt$net.corda.node.internal.cordapp.VirtualCordapps.kt</ID>
+    <ID>MatchingDeclarationName:ClassLoadingUtils.kt$net.corda.core.internal.ClassLoadingUtils.kt</ID>
     <ID>ModifierOrder:NodeNamedCache.kt$DefaultNamedCacheFactory$open protected</ID>
     <ID>NestedBlockDepth:ANSIProgressRenderer.kt$ANSIProgressRenderer$// Returns number of lines rendered. private fun renderLevel(ansi: Ansi, error: Boolean): Int</ID>
     <ID>NestedBlockDepth:AbstractAggregatedList.kt$AbstractAggregatedList$override fun sourceChanged(c: ListChangeListener.Change&lt;out E&gt;)</ID>

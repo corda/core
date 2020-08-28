@@ -35,6 +35,7 @@ interface NodeConfiguration : ConfigurationWithOptionsContainer {
     val security: SecurityConfiguration?
     val devMode: Boolean
     val devModeOptions: DevModeOptions?
+    val lowMemoryMode: Boolean
     @Deprecated(message = "Use of single compatibility zone URL is deprecated", replaceWith = ReplaceWith("networkServices.networkMapURL"))
     val compatibilityZoneURL: URL?
     val networkServices: NetworkServicesConfig?
@@ -58,9 +59,9 @@ interface NodeConfiguration : ConfigurationWithOptionsContainer {
     val localShellUnsafe: Boolean
     val database: DatabaseConfig
     val noLocalShell: Boolean get() = false
-    val transactionCacheSizeBytes: Long get() = defaultTransactionCacheSize
-    val attachmentContentCacheSizeBytes: Long get() = defaultAttachmentContentCacheSize
-    val attachmentCacheBound: Long get() = defaultAttachmentCacheBound
+    val transactionCacheSizeBytes: Long get() = if (lowMemoryMode) lowMemoryModeTransactionCacheSize else defaultTransactionCacheSize
+    val attachmentContentCacheSizeBytes: Long get() = if (lowMemoryMode) lowMemoryModeAttachmentContentCacheSize else defaultAttachmentContentCacheSize
+    val attachmentCacheBound: Long get() = if (lowMemoryMode) lowMemoryModeAttachmentCacheBound else defaultAttachmentCacheBound
     // do not change this value without syncing it with ScheduledFlowsDrainingModeTest
     val drainingModePollPeriod: Duration get() = Duration.ofSeconds(5)
     val extraNetworkMapKeys: List<UUID>
@@ -96,6 +97,7 @@ interface NodeConfiguration : ConfigurationWithOptionsContainer {
     companion object {
         // default to at least 8MB and a bit extra for larger heap sizes
         val defaultTransactionCacheSize: Long = 8.MB + getAdditionalCacheMemory()
+        val lowMemoryModeTransactionCacheSize: Long = 4.MB + getAdditionalCacheMemoryForLowMemoryMode()
 
         internal val DEFAULT_FLOW_MONITOR_PERIOD_MILLIS: Duration = Duration.ofMinutes(1)
         internal val DEFAULT_FLOW_MONITOR_SUSPENSION_LOGGING_THRESHOLD_MILLIS: Duration = Duration.ofMinutes(1)
@@ -105,8 +107,15 @@ interface NodeConfiguration : ConfigurationWithOptionsContainer {
             return Math.max((Runtime.getRuntime().maxMemory() - 300.MB) / 20, 0)
         }
 
+        // add 2.5% of any heapsize over 400MB to the transaction cache size in the low memory mode
+        private fun getAdditionalCacheMemoryForLowMemoryMode(): Long {
+            return Math.max((Runtime.getRuntime().maxMemory() - 400.MB) / 40, 0)
+        }
+
         internal val defaultAttachmentContentCacheSize: Long = 10.MB
+        internal val lowMemoryModeAttachmentContentCacheSize: Long = 5.MB
         internal const val defaultAttachmentCacheBound = 1024L
+        internal const val lowMemoryModeAttachmentCacheBound = 512L
 
         const val cordappDirectoriesKey = "cordappDirectories"
 

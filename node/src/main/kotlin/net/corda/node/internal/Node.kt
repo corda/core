@@ -280,7 +280,8 @@ open class Node(configuration: NodeConfiguration,
     private var internalRpcMessagingClient: InternalRPCMessagingClient? = null
     private var rpcBroker: ArtemisBroker? = null
 
-    protected open val journalBufferTimeout : Int? = null
+    // The timeout set to 0 stops Artemis from allocating memory in un-managed space which decreases the overall memory usage
+    protected open val journalBufferTimeout : Int? = if (configuration.lowMemoryMode) 0 else null
 
     private var shutdownHook: ShutdownHook? = null
 
@@ -343,7 +344,9 @@ open class Node(configuration: NodeConfiguration,
 
         network as P2PMessagingClient
 
-        if (System.getProperty("io.netty.allocator.numHeapArenas").isNullOrBlank()) {
+        if (configuration.lowMemoryMode) {
+            System.setProperty("io.netty.allocator.numHeapArenas", "2")
+        } else if (System.getProperty("io.netty.allocator.numHeapArenas").isNullOrBlank()) {
             // Netty arenas are approx 16MB each when max'd out.  Set arenas based on memory, not core count, unless memory is abundant.
             val memBasedArenas = max(Runtime.getRuntime().maxMemory() / 256.MB, 1L)
             // We set the min of the above and the default.
@@ -363,7 +366,7 @@ open class Node(configuration: NodeConfiguration,
         val messageBroker = if (!configuration.messagingServerExternal) {
             val brokerBindAddress = configuration.messagingServerAddress
                     ?: NetworkHostAndPort("0.0.0.0", configuration.p2pAddress.port)
-            ArtemisMessagingServer(configuration, brokerBindAddress, networkParameters.maxMessageSize, journalBufferTimeout)
+            ArtemisMessagingServer(configuration, brokerBindAddress, networkParameters.maxMessageSize, journalBufferTimeout, configuration.lowMemoryMode)
         } else {
             null
         }
@@ -401,14 +404,15 @@ open class Node(configuration: NodeConfiguration,
         // Start up the MQ clients.
         internalRpcMessagingClient?.run {
             closeOnStop()
-            init(rpcOps, securityManager, cacheFactory)
+            init(rpcOps, securityManager, cacheFactory, configuration.lowMemoryMode)
         }
         network.closeOnStop()
         network.start(
                 myIdentity = nodeInfo.legalIdentities[0].owningKey,
                 serviceIdentity = if (nodeInfo.legalIdentities.size == 1) null else nodeInfo.legalIdentities[1].owningKey,
                 advertisedAddress = nodeInfo.addresses[0],
-                maxMessageSize = networkParameters.maxMessageSize
+                maxMessageSize = networkParameters.maxMessageSize,
+                lowMemoryMode = configuration.lowMemoryMode
         )
     }
 
@@ -418,7 +422,8 @@ open class Node(configuration: NodeConfiguration,
                     configuration.p2pSslOptions,
                     serverAddress,
                     networkParameters.maxMessageSize,
-                    failoverCallback = { errorAndTerminate("ArtemisMessagingClient failed. Shutting down.", null) }
+                    failoverCallback = { errorAndTerminate("ArtemisMessagingClient failed. Shutting down.", null) },
+                    lowMemoryMode = configuration.lowMemoryMode
             )
         }
         return BridgeControlListener(
@@ -429,7 +434,8 @@ open class Node(configuration: NodeConfiguration,
                 networkParameters.maxMessageSize,
                 configuration.crlCheckSoftFail.toRevocationConfig(),
                 false,
-                artemisMessagingClientFactory)
+                artemisMessagingClientFactory
+        )
     }
 
     private fun startLocalRpcBroker(securityManager: RPCSecurityManager): BrokerAddresses? {
@@ -439,10 +445,10 @@ open class Node(configuration: NodeConfiguration,
                 with(rpcOptions) {
                     rpcBroker = if (useSsl) {
                         ArtemisRpcBroker.withSsl(configuration.p2pSslOptions, this.address, adminAddress, sslConfig!!, securityManager, MAX_RPC_MESSAGE_SIZE,
-                                journalBufferTimeout, jmxMonitoringHttpPort != null, rpcBrokerDirectory, shouldStartLocalShell())
+                                journalBufferTimeout, jmxMonitoringHttpPort != null, rpcBrokerDirectory, shouldStartLocalShell(), lowMemoryMode)
                     } else {
                         ArtemisRpcBroker.withoutSsl(configuration.p2pSslOptions, this.address, adminAddress, securityManager, MAX_RPC_MESSAGE_SIZE,
-                                journalBufferTimeout, jmxMonitoringHttpPort != null, rpcBrokerDirectory, shouldStartLocalShell())
+                                journalBufferTimeout, jmxMonitoringHttpPort != null, rpcBrokerDirectory, shouldStartLocalShell(), lowMemoryMode)
                     }
                 }
                 rpcBroker!!.addresses

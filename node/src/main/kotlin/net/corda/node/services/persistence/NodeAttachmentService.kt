@@ -55,7 +55,8 @@ class NodeAttachmentService @JvmOverloads constructor(
     metrics: MetricRegistry,
     cacheFactory: NamedCacheFactory,
     private val database: CordaPersistence,
-    val devMode: Boolean = false
+    val devMode: Boolean = false,
+    val lowMemoryMode: Boolean = false
 ) : AttachmentStorageInternal, SingletonSerializeAsToken() {
 
     // This is to break the circular dependency.
@@ -347,16 +348,16 @@ class NodeAttachmentService @JvmOverloads constructor(
                 "$P2P_UPLOADER is a reserved uploader token prefix"
             }
         }
-        return import(jar, uploader, filename)
+        return import(jar, uploader, filename, lowMemoryMode)
     }
 
     override fun privilegedImportAttachment(jar: InputStream, uploader: String, filename: String?): AttachmentId {
-        return import(jar, uploader, filename)
+        return import(jar, uploader, filename, lowMemoryMode)
     }
 
     override fun privilegedImportOrGetAttachment(jar: InputStream, uploader: String, filename: String?): AttachmentId {
         return try {
-            import(jar, uploader, filename)
+            import(jar, uploader, filename, lowMemoryMode)
         } catch (faee: java.nio.file.FileAlreadyExistsException) {
             AttachmentId.parse(faee.message!!)
         }
@@ -382,9 +383,9 @@ class NodeAttachmentService @JvmOverloads constructor(
             } else contractVersionFromFile
 
     // TODO: PLT-147: The attachment should be randomised to prevent brute force guessing and thus privacy leaks.
-    private fun import(jar: InputStream, uploader: String?, filename: String?): AttachmentId {
+    private fun import(jar: InputStream, uploader: String?, filename: String?, lowMemoryMode: Boolean = false): AttachmentId {
         return database.transaction {
-            withContractsInJar(jar) { contractClassNames, inputStream ->
+            withContractsInJar(jar, lowMemoryMode) { contractClassNames, inputStream ->
                 require(inputStream !is JarInputStream) { "Input stream must not be a JarInputStream" }
 
                 // Read the file into RAM and then calculate its hash. The attachment must fit into memory.

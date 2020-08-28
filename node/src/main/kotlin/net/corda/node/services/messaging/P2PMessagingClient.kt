@@ -30,6 +30,7 @@ import net.corda.node.services.statemachine.ExternalEvent
 import net.corda.node.services.statemachine.SenderDeduplicationId
 import net.corda.node.utilities.AffinityExecutor
 import net.corda.node.utilities.errorAndTerminate
+import net.corda.nodeapi.internal.ArtemisConstants
 import net.corda.nodeapi.internal.ArtemisMessagingComponent
 import net.corda.nodeapi.internal.ArtemisMessagingComponent.*
 import net.corda.nodeapi.internal.ArtemisMessagingComponent.Companion.BRIDGE_CONTROL
@@ -154,7 +155,7 @@ class P2PMessagingClient(val config: NodeConfiguration,
      * in the network map data.
      * @param maxMessageSize A bound applied to the message size.
      */
-    fun start(myIdentity: PublicKey, serviceIdentity: PublicKey?, maxMessageSize: Int, advertisedAddress: NetworkHostAndPort = serverAddress) {
+    fun start(myIdentity: PublicKey, serviceIdentity: PublicKey?, maxMessageSize: Int, advertisedAddress: NetworkHostAndPort = serverAddress, lowMemoryMode: Boolean = false) {
         this.myIdentity = myIdentity
         this.serviceIdentity = serviceIdentity
         this.advertisedAddress = advertisedAddress
@@ -163,7 +164,7 @@ class P2PMessagingClient(val config: NodeConfiguration,
             started = true
             log.info("Connecting to message broker: $serverAddress")
             // TODO Add broker CN to config for host verification in case the embedded broker isn't used
-            val tcpTransport = p2pConnectorTcpTransport(serverAddress, config.p2pSslOptions)
+            val tcpTransport = p2pConnectorTcpTransport(serverAddress, config.p2pSslOptions, lowMemoryMode = lowMemoryMode)
             locator = ActiveMQClient.createServerLocatorWithoutHA(tcpTransport).apply {
                 // Never time out on our loopback Artemis connections. If we switch back to using the InVM transport this
                 // would be the default and the two lines below can be deleted.
@@ -171,6 +172,7 @@ class P2PMessagingClient(val config: NodeConfiguration,
                 clientFailureCheckPeriod = 30000
                 minLargeMessageSize = maxMessageSize + JOURNAL_HEADER_SIZE
                 isUseGlobalPools = nodeSerializationEnv != null
+                threadPoolMaxSize = if (lowMemoryMode) ArtemisConstants.LOW_MEMORY_MODE_THREAD_POOL_MAX_SIZE else ArtemisConstants.DEFAULT_THREAD_POOL_MAX_SIZE
             }
             val sessionFactory = locator!!.createSessionFactory().addFailoverListener(::failoverCallback)
             // Login using the node username. The broker will authenticate us as its node (as opposed to another peer)

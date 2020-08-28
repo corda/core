@@ -16,7 +16,8 @@ data class ShellConfiguration(
         val ssl: ClientRpcSslOptions? = null,
         val sshdPort: Int? = null,
         val sshHostKeyDirectory: Path? = null,
-        val noLocalShell: Boolean = false) {
+        val noLocalShell: Boolean = false,
+        val lowMemoryMode: Boolean = false) {
     companion object {
         const val COMMANDS_DIR = "shell-commands"
         const val CORDAPPS_DIR = "cordapps"

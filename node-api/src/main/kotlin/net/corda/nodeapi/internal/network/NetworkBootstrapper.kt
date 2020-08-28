@@ -57,7 +57,7 @@ class NetworkBootstrapper
 constructor(private val initSerEnv: Boolean,
                      private val embeddedCordaJar: () -> URL,
                      private val nodeInfosGenerator: (List<Path>) -> List<Path>,
-                     private val contractsJarConverter: (Path) -> ContractsJar) : NetworkBootstrapperWithOverridableParameters {
+                     private val contractsJarConverter: (Path, Boolean) -> ContractsJar) : NetworkBootstrapperWithOverridableParameters {
 
     constructor() : this(
             initSerEnv = true,
@@ -268,8 +268,9 @@ constructor(private val initSerEnv: Boolean,
             println("Generating contract implementations whitelist")
             val signedJars = cordappJars.filter { isSigned(it) } // signed JARs are excluded by default, optionally include them in order to transition states from CZ whitelist to signature constraint
             val unsignedJars = cordappJars - signedJars
-            val newWhitelist = generateWhitelist(existingNetParams, readExcludeWhitelist(directory), unsignedJars.map(contractsJarConverter),
-                    readIncludeWhitelist(directory), signedJars.map(contractsJarConverter))
+            val contractsJarConverterWithAdditionalFlag: (Path) -> ContractsJar = { contractsJarConverter(it, false) }
+            val newWhitelist = generateWhitelist(existingNetParams, readExcludeWhitelist(directory), unsignedJars.map(contractsJarConverterWithAdditionalFlag),
+                    readIncludeWhitelist(directory), signedJars.map(contractsJarConverterWithAdditionalFlag))
             val newNetParams = installNetworkParameters(notaryInfos, newWhitelist, existingNetParams, nodeDirs, networkParametersOverrides)
             if (newNetParams != existingNetParams) {
                 println("${if (existingNetParams == null) "New" else "Updated"} $newNetParams")
