@@ -31,7 +31,7 @@ import net.corda.testing.core.singleIdentity
 import net.corda.testing.driver.DriverParameters
 import net.corda.testing.driver.driver
 import org.hibernate.exception.ConstraintViolationException
-import org.junit.Before
+import org.junit.After
 import org.junit.Test
 import java.lang.RuntimeException
 import java.sql.Connection
@@ -44,10 +44,9 @@ import kotlin.test.assertEquals
 @Suppress("TooGenericExceptionCaught", "TooGenericExceptionThrown")
 class FlowEntityManagerTest : AbstractFlowEntityManagerTest() {
 
-    @Before
-    override fun before() {
+    @After
+    fun cleanUp() {
         MyService.includeRawUpdates = false
-        super.before()
     }
 
     @Test(timeout = 300_000)

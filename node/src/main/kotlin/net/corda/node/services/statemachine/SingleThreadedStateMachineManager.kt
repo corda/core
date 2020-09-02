@@ -64,7 +64,7 @@ import kotlin.streams.toList
  * thread actually starts them via [deliverExternalEvent].
  */
 @ThreadSafe
-internal class SingleThreadedStateMachineManager(
+class SingleThreadedStateMachineManager(
         val serviceHub: ServiceHubInternal,
         private val checkpointStorage: CheckpointStorage,
         val executor: ExecutorService,

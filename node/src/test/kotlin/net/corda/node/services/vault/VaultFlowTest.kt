@@ -14,6 +14,7 @@ import net.corda.core.transactions.TransactionBuilder
 import net.corda.node.services.statemachine.StaffedFlowHospital
 import net.corda.testing.core.DummyCommandData
 import net.corda.testing.core.singleIdentity
+import net.corda.testing.internal.StateMachineTest
 import net.corda.testing.internal.vault.DUMMY_DEAL_PROGRAM_ID
 import net.corda.testing.internal.vault.DummyDealContract
 import net.corda.testing.internal.vault.UNIQUE_DUMMY_LINEAR_CONTRACT_PROGRAM_ID
@@ -30,7 +31,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-class VaultFlowTest {
+class VaultFlowTest : StateMachineTest() {
     private lateinit var mockNetwork: MockNetwork
     private lateinit var partyA: StartedMockNode
     private lateinit var partyB: StartedMockNode
@@ -55,7 +56,6 @@ class VaultFlowTest {
     @After
     fun tearDown() {
         mockNetwork.stopNodes()
-        StaffedFlowHospital.onFlowKeptForOvernightObservation.clear()
     }
 
     @Test(timeout=300_000)

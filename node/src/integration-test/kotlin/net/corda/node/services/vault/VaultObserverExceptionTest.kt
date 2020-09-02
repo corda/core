@@ -33,6 +33,7 @@ import net.corda.testing.driver.DriverParameters
 import net.corda.testing.driver.NodeHandle
 import net.corda.testing.driver.OutOfProcess
 import net.corda.testing.driver.driver
+import net.corda.testing.internal.StateMachineTest
 import net.corda.testing.node.User
 import net.corda.testing.node.internal.findCordapp
 import org.assertj.core.api.Assertions
@@ -49,7 +50,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
-class VaultObserverExceptionTest {
+class VaultObserverExceptionTest : StateMachineTest() {
     companion object {
 
         val log = contextLogger()
@@ -62,9 +63,6 @@ class VaultObserverExceptionTest {
 
     @After
     fun tearDown() {
-        StaffedFlowHospital.DatabaseEndocrinologist.customConditions.clear()
-        StaffedFlowHospital.onFlowKeptForOvernightObservation.clear()
-        StaffedFlowHospital.onFlowAdmitted.clear()
         DbListenerService.onError = null
         DbListenerService.safeSubscription = true
         DbListenerService.onNextVisited = {}

@@ -55,6 +55,7 @@ import net.corda.testing.core.dummyCommand
 import net.corda.testing.core.singleIdentity
 import net.corda.testing.flows.registerCordappFlowFactory
 import net.corda.testing.internal.LogHelper
+import net.corda.testing.internal.StateMachineTest
 import net.corda.testing.node.InMemoryMessagingNetwork.MessageTransfer
 import net.corda.testing.node.InMemoryMessagingNetwork.ServicePeerAllocationStrategy.RoundRobin
 import net.corda.testing.node.internal.DUMMY_CONTRACTS_CORDAPP
@@ -91,7 +92,7 @@ import kotlin.streams.toList
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
-class FlowFrameworkTests {
+class FlowFrameworkTests : StateMachineTest() {
     companion object {
         init {
             LogHelper.setLevel("+net.corda.flow")
@@ -145,10 +146,8 @@ class FlowFrameworkTests {
         mockNet.stopNodes()
         receivedSessionMessages.clear()
 
-        SuspendingFlow.hookBeforeCheckpoint = {}
-        SuspendingFlow.hookAfterCheckpoint = {}
-        StaffedFlowHospital.onFlowResuscitated.clear()
-        StaffedFlowHospital.onFlowKeptForOvernightObservation.clear()
+        SuspendingFlow.hookBeforeCheckpoint = null
+        SuspendingFlow.hookAfterCheckpoint = null
     }
 
     @Test(timeout=300_000)
@@ -1251,14 +1250,14 @@ internal class ExceptionFlow<E : Exception>(val exception: () -> E) : FlowLogic<
 internal class SuspendingFlow : FlowLogic<Unit>() {
 
     companion object {
-        var hookBeforeCheckpoint: FlowStateMachine<*>.() -> Unit = {}
-        var hookAfterCheckpoint: FlowStateMachine<*>.() -> Unit = {}
+        var hookBeforeCheckpoint: (FlowStateMachine<*>.() -> Unit)? = null
+        var hookAfterCheckpoint: (FlowStateMachine<*>.() -> Unit)? = null
     }
 
     @Suspendable
     override fun call() {
-        stateMachine.hookBeforeCheckpoint()
+        hookBeforeCheckpoint?.invoke(stateMachine)
         stateMachine.suspend(FlowIORequest.ForceCheckpoint, maySkipCheckpoint = false) // flow checkpoints => checkpoint is in DB
-        stateMachine.hookAfterCheckpoint()
+        hookAfterCheckpoint?.invoke(stateMachine)
     }
 }

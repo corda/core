@@ -12,6 +12,7 @@ import net.corda.core.utilities.getOrThrow
 import net.corda.core.utilities.seconds
 import net.corda.node.services.persistence.DBCheckpointStorage
 import net.corda.testing.core.ALICE_NAME
+import net.corda.testing.internal.StateMachineTest
 import net.corda.testing.node.InMemoryMessagingNetwork
 import net.corda.testing.node.internal.DUMMY_CONTRACTS_CORDAPP
 import net.corda.testing.node.internal.FINANCE_CONTRACTS_CORDAPP
@@ -38,7 +39,7 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-class FlowClientIdTests {
+class FlowClientIdTests : StateMachineTest() {
 
     private lateinit var mockNet: InternalMockNetwork
     private lateinit var aliceNode: TestStartedNode
@@ -56,15 +57,10 @@ class FlowClientIdTests {
     @After
     fun cleanUp() {
         mockNet.stopNodes()
+
         ResultFlow.hook = null
         ResultFlow.suspendableHook = null
         UnSerializableResultFlow.firstRun = true
-        SingleThreadedStateMachineManager.beforeClientIDCheck = null
-        SingleThreadedStateMachineManager.onClientIDNotFound = null
-        SingleThreadedStateMachineManager.onCallingStartFlowInternal = null
-        SingleThreadedStateMachineManager.onStartFlowInternalThrewAndAboutToRemove = null
-
-        StaffedFlowHospital.onFlowErrorPropagated.clear()
     }
 
     @Test(timeout = 300_000)

@@ -25,11 +25,11 @@ import net.corda.testing.core.BOB_NAME
 import net.corda.testing.core.singleIdentity
 import net.corda.testing.driver.DriverParameters
 import net.corda.testing.driver.driver
+import net.corda.testing.internal.StateMachineTest
 import net.corda.testing.node.User
 import net.corda.testing.node.internal.enclosedCordapp
 import org.assertj.core.api.Assertions.assertThatExceptionOfType
 import org.hibernate.exception.ConstraintViolationException
-import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import java.lang.management.ManagementFactory
@@ -45,7 +45,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 
-class FlowRetryTest {
+class FlowRetryTest : StateMachineTest() {
 
     private companion object {
         val user = User("mark", "dadada", setOf(Permissions.all()))
@@ -60,11 +60,6 @@ class FlowRetryTest {
         WrappedTransientConnectionFailureFlow.retryCount = -1
         GeneralExternalFailureFlow.retryCount = -1
         StaffedFlowHospital.DatabaseEndocrinologist.customConditions.add { true }
-    }
-
-    @After
-    fun cleanUp() {
-        StaffedFlowHospital.DatabaseEndocrinologist.customConditions.clear()
     }
 
     @Test(timeout = 300_000)

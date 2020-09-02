@@ -30,6 +30,7 @@ import net.corda.testing.core.BOB_NAME
 import net.corda.testing.core.singleIdentity
 import net.corda.testing.driver.DriverParameters
 import net.corda.testing.driver.driver
+import net.corda.testing.internal.StateMachineTest
 import net.corda.testing.node.internal.FINANCE_CORDAPPS
 import net.corda.testing.node.internal.enclosedCordapp
 import org.junit.Test
@@ -41,7 +42,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-class FlowReloadAfterCheckpointTest {
+class FlowReloadAfterCheckpointTest : StateMachineTest() {
 
     private companion object {
         private val DEFAULT_TIMEOUT = Duration.ofSeconds(10)

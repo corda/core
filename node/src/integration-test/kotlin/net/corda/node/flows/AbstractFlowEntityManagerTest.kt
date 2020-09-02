@@ -10,7 +10,7 @@ import net.corda.core.serialization.CordaSerializable
 import net.corda.core.utilities.getOrThrow
 import net.corda.core.utilities.seconds
 import net.corda.node.services.statemachine.StaffedFlowHospital
-import org.junit.Before
+import net.corda.testing.internal.StateMachineTest
 import java.util.concurrent.Semaphore
 import javax.persistence.Column
 import javax.persistence.Entity
@@ -18,7 +18,7 @@ import javax.persistence.Id
 import javax.persistence.Table
 import kotlin.test.assertEquals
 
-abstract class AbstractFlowEntityManagerTest {
+abstract class AbstractFlowEntityManagerTest : StateMachineTest() {
 
     protected companion object {
 
@@ -32,13 +32,6 @@ abstract class AbstractFlowEntityManagerTest {
 
     @CordaSerializable
     enum class CommitStatus { INTERMEDIATE_COMMIT, NO_INTERMEDIATE_COMMIT }
-
-    @Before
-    open fun before() {
-        StaffedFlowHospital.onFlowDischarged.clear()
-        StaffedFlowHospital.onFlowKeptForOvernightObservation.clear()
-        StaffedFlowHospital.onFlowKeptForOvernightObservation.clear()
-    }
 
     protected inline fun <reified R : FlowLogic<Any>> CordaRPCOps.expectFlowFailureAndAssertCreatedEntities(
         crossinline flow: (CommitStatus) -> R,

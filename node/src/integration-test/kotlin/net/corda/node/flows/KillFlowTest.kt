@@ -35,6 +35,7 @@ import net.corda.testing.driver.NodeParameters
 import net.corda.testing.driver.OutOfProcess
 import net.corda.testing.driver.driver
 import net.corda.testing.node.internal.FINANCE_CORDAPPS
+import net.corda.testing.node.internal.enclosedCordapp
 import org.assertj.core.api.Assertions
 import org.junit.Test
 import java.time.Duration
@@ -136,7 +137,7 @@ class KillFlowTest {
 
     @Test(timeout = 300_000)
     fun `killing a flow suspended in send + receive + sendAndReceive ends the flow immediately`() {
-        driver(DriverParameters(notarySpecs = emptyList(), startNodesInProcess = false)) {
+        driver(DriverParameters(notarySpecs = emptyList(), startNodesInProcess = false, cordappsForAllNodes = listOf(enclosedCordapp()))) {
             val (alice, bob) = listOf(ALICE_NAME, BOB_NAME)
                 .map { startNode(providedName = it) }
                 .transpose()
