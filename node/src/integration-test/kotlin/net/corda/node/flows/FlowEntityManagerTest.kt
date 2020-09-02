@@ -29,7 +29,9 @@ import net.corda.testing.core.BOB_NAME
 import net.corda.testing.core.DummyCommandData
 import net.corda.testing.core.singleIdentity
 import net.corda.testing.driver.DriverParameters
+import net.corda.testing.driver.NodeHandle
 import net.corda.testing.driver.driver
+import net.corda.testing.driver.reusableDriver
 import org.hibernate.exception.ConstraintViolationException
 import org.junit.Before
 import org.junit.Test
@@ -38,6 +40,7 @@ import java.sql.Connection
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.Semaphore
+import javax.persistence.EntityManager
 import javax.persistence.PersistenceException
 import kotlin.test.assertEquals
 
@@ -55,9 +58,10 @@ class FlowEntityManagerTest : AbstractFlowEntityManagerTest() {
         var counter = 0
         StaffedFlowHospital.onFlowDischarged.add { _, _ -> ++counter }
 
-        driver(DriverParameters(notarySpecs = emptyList(), startNodesInProcess = true)) {
+        reusableDriver(DriverParameters(notarySpecs = emptyList(), startNodesInProcess = true)) {
 
             val alice = startNode(providedName = ALICE_NAME).getOrThrow()
+            recoverBy { resetNode(alice) }
             alice.rpc.startFlow(::EntityManagerSaveEntitiesWithoutAFlushFlow)
                 .returnValue.getOrThrow(30.seconds)
             assertEquals(0, counter)
@@ -70,9 +74,10 @@ class FlowEntityManagerTest : AbstractFlowEntityManagerTest() {
     fun `entities can be saved using entity manager with a flush`() {
         var counter = 0
         StaffedFlowHospital.onFlowDischarged.add { _, _ -> ++counter }
-        driver(DriverParameters(notarySpecs = emptyList(), startNodesInProcess = true)) {
+        reusableDriver(DriverParameters(notarySpecs = emptyList(), startNodesInProcess = true)) {
 
             val alice = startNode(providedName = ALICE_NAME).getOrThrow()
+            recoverBy { resetNode(alice) }
 
             alice.rpc.startFlow(::EntityManagerSaveEntitiesWithAFlushFlow)
                 .returnValue.getOrThrow(30.seconds)
@@ -86,9 +91,10 @@ class FlowEntityManagerTest : AbstractFlowEntityManagerTest() {
     fun `entities saved inside an entity manager are only committed when a flow suspends`() {
         var counter = 0
         StaffedFlowHospital.onFlowDischarged.add { _, _ -> ++counter }
-        driver(DriverParameters(notarySpecs = emptyList(), startNodesInProcess = true)) {
+        reusableDriver(DriverParameters(notarySpecs = emptyList(), startNodesInProcess = true)) {
 
             val alice = startNode(providedName = ALICE_NAME).getOrThrow()
+            recoverBy { resetNode(alice) }
 
             var beforeCommitEntities: List<CustomTableEntity>? = null
             EntityManagerSaveEntitiesWithoutAFlushFlow.beforeCommitHook = {
@@ -111,9 +117,10 @@ class FlowEntityManagerTest : AbstractFlowEntityManagerTest() {
 
     @Test(timeout = 300_000)
     fun `constraint violation without a flush breaks`() {
-        driver(DriverParameters(notarySpecs = emptyList(), startNodesInProcess = true)) {
+        reusableDriver(DriverParameters(notarySpecs = emptyList(), startNodesInProcess = true)) {
 
             val alice = startNode(providedName = ALICE_NAME).getOrThrow()
+            recoverBy { resetNode(alice) }
             alice.rpc.expectFlowFailureAndAssertCreatedEntities(
                 flow = ::EntityManagerErrorWithoutAFlushFlow,
                 commitStatus = CommitStatus.NO_INTERMEDIATE_COMMIT,
@@ -131,9 +138,10 @@ class FlowEntityManagerTest : AbstractFlowEntityManagerTest() {
 
     @Test(timeout = 300_000)
     fun `constraint violation with a flush breaks`() {
-        driver(DriverParameters(notarySpecs = emptyList(), startNodesInProcess = true)) {
+        reusableDriver(DriverParameters(notarySpecs = emptyList(), startNodesInProcess = true)) {
 
             val alice = startNode(providedName = ALICE_NAME).getOrThrow()
+            recoverBy { resetNode(alice) }
             alice.rpc.expectFlowFailureAndAssertCreatedEntities(
                 flow = ::EntityManagerErrorWithAFlushFlow,
                 commitStatus = CommitStatus.NO_INTERMEDIATE_COMMIT,
@@ -151,9 +159,10 @@ class FlowEntityManagerTest : AbstractFlowEntityManagerTest() {
 
     @Test(timeout = 300_000)
     fun `constraint violation with a flush that is caught inside an entity manager block saves none of the data inside of it`() {
-        driver(DriverParameters(notarySpecs = emptyList(), startNodesInProcess = true)) {
+        reusableDriver(DriverParameters(notarySpecs = emptyList(), startNodesInProcess = true)) {
 
             val alice = startNode(providedName = ALICE_NAME).getOrThrow()
+            recoverBy { resetNode(alice) }
             // 1 entity saved from the first entity manager block that does not get rolled back
             // even if there is no intermediate commit to the database
             alice.rpc.expectFlowSuccessAndAssertCreatedEntities(
@@ -173,9 +182,10 @@ class FlowEntityManagerTest : AbstractFlowEntityManagerTest() {
 
     @Test(timeout = 300_000)
     fun `constraint violation with a flush that is caught outside the entity manager block saves none of the data inside of it`() {
-        driver(DriverParameters(notarySpecs = emptyList(), startNodesInProcess = true)) {
+        reusableDriver(DriverParameters(notarySpecs = emptyList(), startNodesInProcess = true)) {
 
             val alice = startNode(providedName = ALICE_NAME).getOrThrow()
+            recoverBy { resetNode(alice) }
             // 1 entity saved from the first entity manager block that does not get rolled back
             // even if there is no intermediate commit to the database
             alice.rpc.expectFlowSuccessAndAssertCreatedEntities(
@@ -199,9 +209,10 @@ class FlowEntityManagerTest : AbstractFlowEntityManagerTest() {
         StaffedFlowHospital.onFlowDischarged.add { _, _ -> ++dischargeCounter }
         val lock = Semaphore(0)
         StaffedFlowHospital.onFlowKeptForOvernightObservation.add { _, _ -> lock.release() }
-        driver(DriverParameters(notarySpecs = emptyList(), startNodesInProcess = true)) {
+        reusableDriver(DriverParameters(notarySpecs = emptyList(), startNodesInProcess = true)) {
 
             val alice = startNode(providedName = ALICE_NAME).getOrThrow()
+            recoverBy { resetNode(alice) }
             alice.rpc.startFlow(::EntityManagerErrorInsideASingleEntityManagerFlow)
             lock.acquire()
             // Goes straight to observation due to throwing [EntityExistsException]
@@ -213,9 +224,10 @@ class FlowEntityManagerTest : AbstractFlowEntityManagerTest() {
 
     @Test(timeout = 300_000)
     fun `constraint violation on a single entity when saving multiple entities throws an exception and does not save any data within the entity manager block`() {
-        driver(DriverParameters(notarySpecs = emptyList(), startNodesInProcess = true)) {
+        reusableDriver(DriverParameters(notarySpecs = emptyList(), startNodesInProcess = true)) {
 
             val alice = startNode(providedName = ALICE_NAME).getOrThrow()
+            recoverBy { resetNode(alice) }
             alice.rpc.expectFlowFailureAndAssertCreatedEntities(
                 flow = ::EntityManagerSavingMultipleEntitiesWithASingleErrorFlow,
                 commitStatus = CommitStatus.NO_INTERMEDIATE_COMMIT,
@@ -233,9 +245,10 @@ class FlowEntityManagerTest : AbstractFlowEntityManagerTest() {
 
     @Test(timeout = 300_000)
     fun `constraint violation on a single entity when saving multiple entities and catching the error does not save any data within the entity manager block`() {
-        driver(DriverParameters(notarySpecs = emptyList(), startNodesInProcess = true)) {
+        reusableDriver(DriverParameters(notarySpecs = emptyList(), startNodesInProcess = true)) {
 
             val alice = startNode(providedName = ALICE_NAME).getOrThrow()
+            recoverBy { resetNode(alice) }
             // 1 entity saved from the first entity manager block that does not get rolled back
             // even if there is no intermediate commit to the database
             alice.rpc.expectFlowSuccessAndAssertCreatedEntities(
@@ -255,9 +268,10 @@ class FlowEntityManagerTest : AbstractFlowEntityManagerTest() {
 
     @Test(timeout = 300_000)
     fun `constraint violation that is caught inside an entity manager and more data is saved afterwards inside a new entity manager should save the extra data`() {
-        driver(DriverParameters(notarySpecs = emptyList(), startNodesInProcess = true)) {
+        reusableDriver(DriverParameters(notarySpecs = emptyList(), startNodesInProcess = true)) {
 
             val alice = startNode(providedName = ALICE_NAME).getOrThrow()
+            recoverBy { resetNode(alice) }
             alice.rpc.expectFlowSuccessAndAssertCreatedEntities(
                 flow = ::EntityManagerCatchErrorAndSaveMoreEntitiesInANewEntityManager,
                 commitStatus = CommitStatus.NO_INTERMEDIATE_COMMIT,
@@ -275,9 +289,10 @@ class FlowEntityManagerTest : AbstractFlowEntityManagerTest() {
 
     @Test(timeout = 300_000)
     fun `constraint violation that is caught inside an entity manager and more data is saved afterwards inside the same entity manager should not save the extra data`() {
-        driver(DriverParameters(notarySpecs = emptyList(), startNodesInProcess = true)) {
+        reusableDriver(DriverParameters(notarySpecs = emptyList(), startNodesInProcess = true)) {
 
             val alice = startNode(providedName = ALICE_NAME).getOrThrow()
+            recoverBy { resetNode(alice) }
             alice.rpc.expectFlowSuccessAndAssertCreatedEntities(
                 flow = ::EntityManagerCatchErrorAndSaveMoreEntitiesInTheSameEntityManager,
                 commitStatus = CommitStatus.NO_INTERMEDIATE_COMMIT,
@@ -295,9 +310,10 @@ class FlowEntityManagerTest : AbstractFlowEntityManagerTest() {
 
     @Test(timeout = 300_000)
     fun `constraint violation that is caught outside an entity manager and more data is saved afterwards inside a new entity manager should save the extra data`() {
-        driver(DriverParameters(notarySpecs = emptyList(), startNodesInProcess = true)) {
+        reusableDriver(DriverParameters(notarySpecs = emptyList(), startNodesInProcess = true)) {
 
             val alice = startNode(providedName = ALICE_NAME).getOrThrow()
+            recoverBy { resetNode(alice) }
             alice.rpc.expectFlowSuccessAndAssertCreatedEntities(
                 flow = ::EntityManagerCatchErrorOutsideTheEntityManagerAndSaveMoreEntitiesInANewEntityManager,
                 commitStatus = CommitStatus.NO_INTERMEDIATE_COMMIT,
@@ -317,12 +333,14 @@ class FlowEntityManagerTest : AbstractFlowEntityManagerTest() {
     fun `constraint violation that is caught inside an entity manager should allow a flow to continue processing as normal`() {
         var counter = 0
         StaffedFlowHospital.onFlowDischarged.add { _, _ -> ++counter }
-        driver(DriverParameters(startNodesInProcess = true)) {
+        reusableDriver(DriverParameters(startNodesInProcess = true)) {
 
             val (alice, bob) = listOf(ALICE_NAME, BOB_NAME)
                     .map { startNode(providedName = it) }
                     .transpose()
                     .getOrThrow()
+                    .onEach { node->
+                        recoverBy { resetNode(node) } }
 
             val txId =
                 alice.rpc.startFlow(::EntityManagerWithFlushCatchAndInteractWithOtherPartyFlow, bob.nodeInfo.singleIdentity())
@@ -374,9 +392,10 @@ class FlowEntityManagerTest : AbstractFlowEntityManagerTest() {
         var counter = 0
         StaffedFlowHospital.onFlowDischarged.add { _, _ -> ++counter }
 
-        driver(DriverParameters(notarySpecs = emptyList(), startNodesInProcess = true)) {
+        reusableDriver(DriverParameters(notarySpecs = emptyList(), startNodesInProcess = true)) {
 
             val alice = startNode(providedName = ALICE_NAME).getOrThrow()
+            recoverBy { resetNode(alice) }
             alice.rpc.startFlow(::EntityManagerSaveAndThrowNonDatabaseErrorFlow)
                 .returnValue.getOrThrow(30.seconds)
             assertEquals(0, counter)
@@ -391,9 +410,10 @@ class FlowEntityManagerTest : AbstractFlowEntityManagerTest() {
         var counter = 0
         StaffedFlowHospital.onFlowDischarged.add { _, _ -> ++counter }
 
-        driver(DriverParameters(notarySpecs = emptyList(), startNodesInProcess = true)) {
+        reusableDriver(DriverParameters(notarySpecs = emptyList(), startNodesInProcess = true)) {
 
             val alice = startNode(providedName = ALICE_NAME).getOrThrow()
+            recoverBy { resetNode(alice) }
             alice.rpc.startFlow(::EntityManagerSaveFlushAndThrowNonDatabaseErrorFlow)
                 .returnValue.getOrThrow(30.seconds)
             assertEquals(0, counter)
@@ -407,9 +427,10 @@ class FlowEntityManagerTest : AbstractFlowEntityManagerTest() {
         var counter = 0
         StaffedFlowHospital.onFlowDischarged.add { _, _ -> ++counter }
 
-        driver(DriverParameters(notarySpecs = emptyList(), startNodesInProcess = true)) {
+        reusableDriver(DriverParameters(notarySpecs = emptyList(), startNodesInProcess = true)) {
 
             val alice = startNode(providedName = ALICE_NAME).getOrThrow()
+            recoverBy { resetNode(alice) }
             alice.rpc.expectFlowSuccessAndAssertCreatedEntities(
                 flow = ::EntityManagerCatchDatabaseErrorInsideEntityManagerThrowNonDatabaseErrorAndCatchOutsideFlow,
                 commitStatus = CommitStatus.NO_INTERMEDIATE_COMMIT,
@@ -458,6 +479,30 @@ class FlowEntityManagerTest : AbstractFlowEntityManagerTest() {
                 flush()
             }
             sleep(1.millis)
+        }
+    }
+
+    @StartableByRPC
+    class EntityManagerResetFlow : FlowLogic<Unit>() {
+
+        private fun EntityManager.remove(vararg entitis: CustomTableEntity) {
+            entitis.forEach {entity ->
+                val saved = find(CustomTableEntity::class.java, entity.id)
+                if(saved != null) {
+                    remove(saved)
+                }
+
+            }
+        }
+
+        @Suspendable
+        override fun call() {
+            serviceHub.withEntityManager {
+                remove(entityWithIdOne,
+                        anotherEntityWithIdOne,
+                        entityWithIdTwo,
+                        entityWithIdThree)
+            }
         }
     }
 
@@ -888,5 +933,9 @@ class FlowEntityManagerTest : AbstractFlowEntityManagerTest() {
                 }
             }.get()
         }
+    }
+
+    private fun resetNode(node: NodeHandle) {
+        node.rpc.startFlow(::EntityManagerResetFlow).returnValue.getOrThrow()
     }
 }

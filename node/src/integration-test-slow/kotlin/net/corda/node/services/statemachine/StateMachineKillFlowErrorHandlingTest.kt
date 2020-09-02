@@ -9,8 +9,6 @@ import net.corda.core.messaging.startTrackedFlow
 import net.corda.core.utilities.ProgressTracker
 import net.corda.core.utilities.getOrThrow
 import net.corda.core.utilities.seconds
-import net.corda.testing.core.ALICE_NAME
-import net.corda.testing.core.CHARLIE_NAME
 import net.corda.testing.core.singleIdentity
 import org.junit.Test
 import java.time.Duration
@@ -33,7 +31,7 @@ class StateMachineKillFlowErrorHandlingTest : StateMachineErrorHandlingTest() {
     @Test(timeout = 300_000)
     fun `error during transition due to killing a flow will terminate the flow`() {
         startDriver {
-            val alice = createNode(ALICE_NAME)
+            val alice = createNode()
 
             val flow = alice.rpc.startTrackedFlow(StateMachineKillFlowErrorHandlingTest::SleepFlow)
 
@@ -70,7 +68,7 @@ class StateMachineKillFlowErrorHandlingTest : StateMachineErrorHandlingTest() {
     @Test(timeout = 300_000)
     fun `flow killed during user code execution stops and removes the flow correctly`() {
         startDriver {
-            val alice = createNode(ALICE_NAME)
+            val alice = createNode()
 
             val flow = alice.rpc.startTrackedFlow(StateMachineKillFlowErrorHandlingTest::ThreadSleepFlow)
 
@@ -103,7 +101,7 @@ class StateMachineKillFlowErrorHandlingTest : StateMachineErrorHandlingTest() {
     @Test(timeout = 300_000)
     fun `flow killed when it is in the flow hospital for observation is removed correctly`() {
         startDriver {
-            val (charlie, alice, port) = createNodeAndBytemanNode(CHARLIE_NAME, ALICE_NAME)
+            val (charlie, alice, port) = createNodeAndBytemanNode()
 
             val rules = """
                 RULE Create Counter

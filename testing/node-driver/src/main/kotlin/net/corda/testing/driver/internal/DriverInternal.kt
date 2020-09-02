@@ -77,6 +77,8 @@ data class InProcessImpl(
         node.registerInitiatedFlow(initiatedFlowClass)
         return Observable.empty()
     }
+
+    override fun running(): Boolean = nodeThread.isAlive
 }
 
 val InProcess.internalServices: StartedNodeServices get() = services as StartedNodeServices

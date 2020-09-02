@@ -7,11 +7,13 @@ import net.corda.core.flows.HospitalizeFlowException
 import net.corda.core.flows.InitiatedBy
 import net.corda.core.flows.InitiatingFlow
 import net.corda.core.flows.StartableByRPC
-import net.corda.core.identity.CordaX500Name
 import net.corda.core.identity.Party
+import net.corda.core.internal.concurrent.transpose
 import net.corda.core.internal.list
 import net.corda.core.internal.readAllLines
+import net.corda.core.internal.writeText
 import net.corda.core.messaging.CordaRPCOps
+import net.corda.core.messaging.StateMachineInfo
 import net.corda.core.messaging.startFlow
 import net.corda.core.node.AppServiceHub
 import net.corda.core.node.services.CordaService
@@ -21,13 +23,16 @@ import net.corda.core.utilities.getOrThrow
 import net.corda.core.utilities.seconds
 import net.corda.core.utilities.unwrap
 import net.corda.node.services.Permissions
+import net.corda.testing.core.ALICE_NAME
+import net.corda.testing.core.CHARLIE_NAME
 import net.corda.testing.core.DUMMY_NOTARY_NAME
 import net.corda.testing.driver.DriverDSL
 import net.corda.testing.driver.DriverParameters
 import net.corda.testing.driver.NodeHandle
 import net.corda.testing.driver.NodeParameters
-import net.corda.testing.driver.driver
+import net.corda.testing.driver.ReusableDriverDsl
 import net.corda.testing.driver.internal.OutOfProcessImpl
+import net.corda.testing.driver.reusableDriver
 import net.corda.testing.node.NotarySpec
 import net.corda.testing.node.TestCordapp
 import net.corda.testing.node.User
@@ -44,13 +49,17 @@ abstract class StateMachineErrorHandlingTest {
     val rpcUser = User("user1", "test", permissions = setOf(Permissions.all()))
     var counter = 0
 
+    companion object {
+        private val bytemanPorts = mutableMapOf<DriverDSL, Int>()
+    }
+
     @Before
     fun setup() {
         counter = 0
     }
 
-    internal fun startDriver(notarySpec: NotarySpec = NotarySpec(DUMMY_NOTARY_NAME), dsl: DriverDSL.() -> Unit) {
-        driver(
+    internal fun startDriver(notarySpec: NotarySpec = NotarySpec(DUMMY_NOTARY_NAME), dsl: ReusableDriverDsl.() -> Unit) {
+        reusableDriver(
             DriverParameters(
                 notarySpecs = listOf(notarySpec),
                 startNodesInProcess = false,
@@ -62,49 +71,82 @@ abstract class StateMachineErrorHandlingTest {
         }
     }
 
-    internal fun DriverDSL.createBytemanNode(nodeProvidedName: CordaX500Name): Pair<NodeHandle, Int> {
-        val port = nextPort()
+    internal fun ReusableDriverDsl.createBytemanNode(): Pair<NodeHandle, Int> {
+        val port = bytemanPorts.computeIfAbsent(this) { nextPort() }
         val bytemanNodeHandle = (this as InternalDriverDSL).startNode(
             NodeParameters(
-                providedName = nodeProvidedName,
+                providedName = CHARLIE_NAME,
                 rpcUsers = listOf(rpcUser)
             ),
-            bytemanPort = port
-        )
-        return bytemanNodeHandle.getOrThrow() to port
+                bytemanPort = port
+        ).getOrThrow()
+        recoverBy {
+            Submit("localhost", port)
+                    .deleteAllRules()
+        }
+        recoverBy {
+            resetCounters(bytemanNodeHandle)
+            bytemanNodeHandle.removeBytemanLogs()
+        }
+        return NodeWithReusableNumberOfStateMachine(bytemanNodeHandle) to port
     }
 
-    internal fun DriverDSL.createNode(nodeProvidedName: CordaX500Name): NodeHandle {
-        return (this as InternalDriverDSL).startNode(
+    internal fun ReusableDriverDsl.createNode(additionalCordapps: Collection<TestCordapp> = emptyList()): NodeHandle {
+        val node = startNode(
             NodeParameters(
-                providedName = nodeProvidedName,
-                rpcUsers = listOf(rpcUser)
+                providedName = ALICE_NAME,
+                rpcUsers = listOf(rpcUser),
+                additionalCordapps = additionalCordapps
             )
         ).getOrThrow()
+        recoverBy { resetCounters(node) }
+        return NodeWithReusableNumberOfStateMachine(node)
     }
 
-    internal fun DriverDSL.createNodeAndBytemanNode(
-        nodeProvidedName: CordaX500Name,
-        bytemanNodeProvidedName: CordaX500Name,
-        additionalCordapps: Collection<TestCordapp> = emptyList()
+    private class NodeWithReusableNumberOfStateMachine(private val node: NodeHandle) : NodeHandle by node {
+        private val snapshotsCount = node.rpc.stateMachinesSnapshot().size
+        override val rpc: CordaRPCOps
+            get() {
+                return object: CordaRPCOps by node.rpc {
+                    override fun stateMachinesSnapshot(): List<StateMachineInfo> {
+                        val currentSnapshots = node.rpc.stateMachinesSnapshot()
+                        return currentSnapshots.takeLast(currentSnapshots.size - snapshotsCount)
+                    }
+                }
+            }
+    }
+
+    internal fun ReusableDriverDsl.createNodeAndBytemanNode(
+            additionalCordapps: Collection<TestCordapp> = emptyList()
     ): Triple<NodeHandle, NodeHandle, Int> {
-        val port = nextPort()
-        val nodeHandle = (this as InternalDriverDSL).startNode(
-            NodeParameters(
-                providedName = nodeProvidedName,
-                rpcUsers = listOf(rpcUser),
-                additionalCordapps = additionalCordapps
-            )
-        )
-        val bytemanNodeHandle = startNode(
-            NodeParameters(
-                providedName = bytemanNodeProvidedName,
-                rpcUsers = listOf(rpcUser),
-                additionalCordapps = additionalCordapps
-            ),
-            bytemanPort = port
-        )
-        return Triple(nodeHandle.getOrThrow(), bytemanNodeHandle.getOrThrow(), port)
+        val port = bytemanPorts.computeIfAbsent(this) { nextPort() }
+        val (alice, charlie) = listOf(
+                (this as InternalDriverDSL).startNode(
+                        NodeParameters(
+                                providedName = ALICE_NAME,
+                                rpcUsers = listOf(rpcUser),
+                                additionalCordapps = additionalCordapps
+                        )),
+                startNode(
+                        NodeParameters(
+                                providedName = CHARLIE_NAME,
+                                rpcUsers = listOf(rpcUser),
+                                additionalCordapps = additionalCordapps
+                        ),
+                        bytemanPort = port))
+                .transpose()
+                .getOrThrow()
+                .onEach {  recoverBy { resetCounters(it) } }
+                .onEach { recoverBy {
+                    it.removeBytemanLogs() } }
+                .map { NodeWithReusableNumberOfStateMachine(it) }
+
+        recoverBy {
+            Submit("localhost", port)
+                    .deleteAllRules()
+        }
+
+        return Triple(alice, charlie, port)
     }
 
     internal fun submitBytemanRules(rules: String, port: Int) {
@@ -116,6 +158,13 @@ abstract class StateMachineErrorHandlingTest {
         return baseDirectory.list()
             .filter { "net.corda.node.Corda" in it.toString() && "stdout.log" in it.toString() }
             .flatMap { it.readAllLines() }
+    }
+
+    private fun NodeHandle.removeBytemanLogs() {
+        baseDirectory.list()
+                .filter { "net.corda.node.Corda" in it.toString() }
+                .filter { "stdout.log" in it.toString() }
+                .forEach { it.writeText("") }
     }
 
     internal fun OutOfProcessImpl.stop(timeout: Duration): Boolean {
@@ -160,6 +209,13 @@ abstract class StateMachineErrorHandlingTest {
         assertEquals(failed, counts.failed, "There should be $failed failed checkpoints")
         assertEquals(completed, counts.completed, "There should be $completed completed checkpoints")
         assertEquals(hospitalized, counts.hospitalized, "There should be $hospitalized hospitalized checkpoints")
+    }
+
+    private fun resetCounters(node: NodeHandle) {
+        node.rpc
+                .startFlow(StateMachineErrorHandlingTest::ResetCounters)
+                .returnValue
+                .getOrThrow(20.seconds)
     }
 
     internal fun CordaRPCOps.assertNumberOfCheckpointsAllZero() = assertNumberOfCheckpoints()
@@ -233,8 +289,23 @@ abstract class StateMachineErrorHandlingTest {
                     ps.executeQuery().use { rs ->
                         rs.next()
                         rs.getLong(1)
+                    }.toInt()
+                }
+        }
+    }
+
+    @StartableByRPC
+    class ResetCounters : FlowLogic<Unit>() {
+        override fun call() {
+            serviceHub.cordaService(HospitalCounter::class.java).reset()
+            serviceHub.jdbcSession()
+                    .prepareStatement("delete from node_checkpoints where flow_id != ?")
+                    .apply {
+                        setString(1, runId.uuid.toString())
                     }
-                }.toInt()
+                    .use { ps ->
+                        ps.executeUpdate()
+                    }
         }
     }
 
@@ -298,6 +369,15 @@ abstract class StateMachineErrorHandlingTest {
                     StaffedFlowHospital.Outcome.UNTREATABLE -> propagatedRetryCounter++
                 }
             }
+        }
+
+        fun reset() {
+            dischargedCounter = 0
+            observationCounter = 0
+            propagatedCounter = 0
+            dischargeRetryCounter = 0
+            observationRetryCounter = 0
+            propagatedRetryCounter = 0
         }
     }
 

@@ -9,8 +9,6 @@ import net.corda.core.utilities.seconds
 import net.corda.finance.DOLLARS
 import net.corda.finance.flows.CashIssueAndPaymentFlow
 import net.corda.node.services.api.ServiceHubInternal
-import net.corda.testing.core.ALICE_NAME
-import net.corda.testing.core.CHARLIE_NAME
 import net.corda.testing.core.DUMMY_NOTARY_NAME
 import net.corda.testing.core.singleIdentity
 import net.corda.testing.node.NotarySpec
@@ -35,7 +33,7 @@ class StateMachineFinalityErrorHandlingTest : StateMachineErrorHandlingTest() {
     @Test(timeout = 300_000)
     fun `error recording a transaction inside of ReceiveFinalityFlow will keep the flow in for observation`() {
         startDriver(notarySpec = NotarySpec(DUMMY_NOTARY_NAME, validating = false)) {
-            val (alice, charlie, port) = createNodeAndBytemanNode(ALICE_NAME, CHARLIE_NAME, FINANCE_CORDAPPS)
+            val (alice, charlie, port) = createNodeAndBytemanNode(FINANCE_CORDAPPS)
 
             // could not get rule for FinalityDoctor + observation counter to work
             val rules = """
@@ -96,7 +94,7 @@ class StateMachineFinalityErrorHandlingTest : StateMachineErrorHandlingTest() {
     @Test(timeout = 300_000)
     fun `error resolving a transaction's dependencies inside of ReceiveFinalityFlow will keep the flow in for observation`() {
         startDriver(notarySpec = NotarySpec(DUMMY_NOTARY_NAME, validating = false)) {
-            val (alice, charlie, port) = createNodeAndBytemanNode(ALICE_NAME, CHARLIE_NAME, FINANCE_CORDAPPS)
+            val (alice, charlie, port) = createNodeAndBytemanNode(FINANCE_CORDAPPS)
 
             // could not get rule for FinalityDoctor + observation counter to work
             val rules = """
@@ -159,7 +157,7 @@ class StateMachineFinalityErrorHandlingTest : StateMachineErrorHandlingTest() {
     @Test(timeout = 300_000)
     fun `error during transition with CommitTransaction action while receiving a transaction inside of ReceiveFinalityFlow will be retried and complete successfully`() {
         startDriver(notarySpec = NotarySpec(DUMMY_NOTARY_NAME, validating = false)) {
-            val (alice, charlie, port) = createNodeAndBytemanNode(ALICE_NAME, CHARLIE_NAME, FINANCE_CORDAPPS)
+            val (alice, charlie, port) = createNodeAndBytemanNode(FINANCE_CORDAPPS)
 
             val rules = """
                 RULE Create Counter
@@ -226,7 +224,7 @@ class StateMachineFinalityErrorHandlingTest : StateMachineErrorHandlingTest() {
     @Test(timeout = 300_000)
     fun `error during transition with CommitTransaction action while receiving a transaction inside of ReceiveFinalityFlow will be retried and be kept for observation is error persists`() {
         startDriver(notarySpec = NotarySpec(DUMMY_NOTARY_NAME, validating = false)) {
-            val (alice, charlie, port) = createNodeAndBytemanNode(ALICE_NAME, CHARLIE_NAME, FINANCE_CORDAPPS)
+            val (alice, charlie, port) = createNodeAndBytemanNode(FINANCE_CORDAPPS)
 
             val rules = """
                 RULE Create Counter
@@ -275,6 +273,8 @@ class StateMachineFinalityErrorHandlingTest : StateMachineErrorHandlingTest() {
             )
             assertEquals(1, alice.rpc.stateMachinesSnapshot().size)
             assertEquals(1, charlie.rpc.stateMachinesSnapshot().size)
+            alice.stop()
+            charlie.stop()
         }
     }
 }

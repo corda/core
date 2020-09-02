@@ -129,7 +129,7 @@ import kotlin.collections.HashSet
 import kotlin.concurrent.thread
 import net.corda.nodeapi.internal.config.User as InternalUser
 
-class DriverDSLImpl(
+open class DriverDSLImpl(
         val portAllocation: PortAllocation,
         val debugPortAllocation: PortAllocation,
         val systemProperties: Map<String, String>,
@@ -263,7 +263,7 @@ class DriverDSLImpl(
 
     override fun startNode(parameters: NodeParameters): CordaFuture<NodeHandle> = startNode(parameters, bytemanPort = null)
 
-    override fun startNode(parameters: NodeParameters, bytemanPort: Int?): CordaFuture<NodeHandle> {
+    open override fun startNode(parameters: NodeParameters, bytemanPort: Int?): CordaFuture<NodeHandle> {
         val p2pAddress = portAllocation.nextHostAndPort()
         // TODO: Derive name from the full picked name, don't just wrap the common name
         val name = parameters.providedName ?: CordaX500Name("${oneOf(names).organisation}-${p2pAddress.port}", "London", "GB")
