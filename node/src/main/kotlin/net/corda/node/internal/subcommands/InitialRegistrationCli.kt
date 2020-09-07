@@ -1,6 +1,7 @@
 package net.corda.node.internal.subcommands
 
 import net.corda.cliutils.CliWrapperBase
+import net.corda.cliutils.ExitCodes
 import net.corda.core.internal.createFile
 import net.corda.core.internal.div
 import net.corda.core.internal.exists
@@ -15,6 +16,7 @@ import net.corda.node.utilities.registration.NodeRegistrationHelper
 import picocli.CommandLine.Mixin
 import picocli.CommandLine.Option
 import java.io.File
+import java.nio.file.Files
 import java.nio.file.Path
 import java.util.function.Consumer
 
@@ -30,7 +32,35 @@ class InitialRegistrationCli(val startup: NodeStartup): CliWrapperBase("initial-
 
     override fun runProgram() : Int {
         val networkRootTrustStorePath: Path = networkRootTrustStorePathParameter ?: cmdLineOptions.baseDirectory / "certificates" / "network-root-truststore.jks"
-        return startup.initialiseAndRun(cmdLineOptions, InitialRegistration(cmdLineOptions.baseDirectory, networkRootTrustStorePath, networkRootTrustStorePassword, skipSchemaCreation, startup))
+
+        //EG-197 luca.debiasi
+        // Execute the code described in InitialRegistration class that is modified to do not require any action in the DB,
+        // The normal process to start the node picks up any change in certificates and network parameters to cache them in the DB.
+        // Consider the InitialRegistration process create a Node instance, it must be disposed properly before a new Node is created
+        // during normal startup.
+        var exitCode = startup.initialiseAndRun(
+                cmdLineOptions,
+                InitialRegistration(
+                        cmdLineOptions.baseDirectory,
+                        networkRootTrustStorePath,
+                        networkRootTrustStorePassword,
+                        skipSchemaCreation,
+                        startup))
+        if (exitCode == ExitCodes.SUCCESS) {
+            // Continue to start the Node.
+            // Remove the process-id marker file to allow startup to bootstrap the Node as no other Node is run before.
+            // Before this point any eventual Node should perform node.stop().
+            val pidPath = (cmdLineOptions.baseDirectory / "process-id")
+            Files.deleteIfExists(pidPath)
+            // Bootstrap the node 'normally', initial registration is done above.
+            exitCode = startup.initialiseAndRun(cmdLineOptions, object : RunAfterNodeInitialisation {
+                val startupTime = System.currentTimeMillis()
+                override fun run(node: Node) = startup.startNode(node, startupTime)
+            }, requireCertificates = true)
+        }
+        // Return the exit code of initial registration, if something bad occurred, or of node running after initial registration.
+        return exitCode
+        //~ EG-197 luca.debiasi
     }
 
     override fun initLogging(): Boolean = this.initLogging(cmdLineOptions.baseDirectory)
@@ -80,14 +110,19 @@ class InitialRegistration(val baseDirectory: Path, private val networkRootTrustS
 
         // Minimal changes to make registration tool create node identity.
         // TODO: Move node identity generation logic from node to registration helper.
-        val node = startup.createNode(conf, versionInfo)
-        if(!skipSchemaMigration) {
-            node.runDatabaseMigrationScripts(updateCoreSchemas = true, updateAppSchemas = true, updateAppSchemasWithCheckpoints = false)
-        }
-        node.generateAndSaveNodeInfo()
 
+        // EG-197 luca.debiasi
+        // The following statement...
+        // val node = startup.createNode(conf, versionInfo)
+        // if(!skipSchemaMigration) {
+        //    node.runDatabaseMigrationScripts(updateCoreSchemas = true, updateAppSchemas = true, updateAppSchemasWithCheckpoints = false)
+        //}
+        //node.generateAndSaveNodeInfo()
+        // ...are removed because replicated during normal node starts.
         println("Successfully registered Corda node with compatibility zone, node identity keys and certificates are stored in '${conf.certificatesDirectory}', it is advised to backup the private keys and certificates.")
-        println("Corda node will now terminate.")
+        // The following statement should be removed.
+        //println("Corda node will now terminate.")
+        //~ EG-197 luca.debiasi
     }
 
     private fun initialRegistration(config: NodeConfiguration) {

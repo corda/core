@@ -7,6 +7,7 @@ import net.corda.cliutils.ExitCodes
 import net.corda.cliutils.printError
 import net.corda.common.logging.CordaVersion
 import net.corda.common.logging.errorReporting.CordaErrorContextProvider
+import net.corda.common.logging.errorReporting.DoubleInitializationException
 import net.corda.common.logging.errorReporting.ErrorCode
 import net.corda.core.contracts.HashAttachmentConstraint
 import net.corda.core.crypto.Crypto
@@ -20,6 +21,7 @@ import net.corda.core.utilities.loggerFor
 import net.corda.node.*
 import net.corda.common.logging.errorReporting.ErrorReporting
 import net.corda.common.logging.errorReporting.report
+import net.corda.core.serialization.internal.nodeSerializationEnv
 import net.corda.node.internal.Node.Companion.isInvalidJavaVersion
 import net.corda.node.internal.cordapp.MultipleCordappsForFlowException
 import net.corda.node.internal.subcommands.*
@@ -68,6 +70,7 @@ abstract class NodeCliCommand(alias: String, description: String, val startup: N
 /** Main corda entry point. */
 open class NodeStartupCli : CordaCliWrapper("corda", "Runs a Corda Node") {
     open val startup = NodeStartup()
+
     @Mixin
     val cmdLineOptions = NodeCmdLineOptions()
 
@@ -154,8 +157,6 @@ open class NodeStartup : NodeStartupLogging {
         const val LOGS_DIRECTORY_NAME = "logs"
         const val LOGS_CAN_BE_FOUND_IN_STRING = "Logs can be found in"
         const val ERROR_CODE_RESOURCE_LOCATION = "error-codes"
-
-
     }
 
     lateinit var cmdLineOptions: SharedNodeCmdLineOptions
@@ -183,12 +184,22 @@ open class NodeStartup : NodeStartupLogging {
         // Step 5. Load and validate node configuration.
         val rawConfig = cmdLineOptions.rawConfiguration().doOnErrors(cmdLineOptions::logRawConfigurationErrors).optional
                 ?: return ExitCodes.FAILURE
-        val configuration = cmdLineOptions.parseConfiguration(rawConfig).doIfValid { logRawConfig(rawConfig) }.doOnErrors(::logConfigurationErrors).optional
+        val configuration = cmdLineOptions.parseConfiguration(rawConfig).doIfValid { logRawConfig(rawConfig) }
+                .doOnErrors(::logConfigurationErrors).optional
                 ?: return ExitCodes.FAILURE
-        ErrorReporting()
-                .usingResourcesAt(ERROR_CODE_RESOURCE_LOCATION)
-                .withContextProvider(CordaErrorContextProvider())
-                .initialiseReporting()
+        // EG-197 luca.debiasi
+        // This method should be run once to create the node and start it.
+        // However, initial registration subcommand calls this method twice:
+        // the simplest solution is to wrap and filter DoubleInitializationException.
+        try {
+            ErrorReporting()
+                    .usingResourcesAt(ERROR_CODE_RESOURCE_LOCATION)
+                    .withContextProvider(CordaErrorContextProvider())
+                    .initialiseReporting()
+        } catch (e: DoubleInitializationException) {
+            logger.warn("{$e.message} filtered: the node starts...")
+        }
+        //~ EG-197 luca.debiasi
 
         // Step 6. Check if we can access the certificates directory
         if (requireCertificates && !canReadCertificatesDirectory(configuration.certificatesDirectory, configuration.devMode)) return ExitCodes.FAILURE
@@ -204,7 +215,11 @@ open class NodeStartup : NodeStartupLogging {
 
         // Step 10. Start node: create the node, check for other command-line options, add extra logging etc.
         if (attempt {
-                    afterNodeInitialisation.run(createNode(configuration, versionInfo))
+                    // EG-197 luca.debiasi
+                    val node = createNode(configuration, versionInfo)
+                    afterNodeInitialisation.run(node)
+                    node.stop()
+                    //~ EG-197 luca.debiasi
                 }.doOnFailure(Consumer(::handleStartError)) !is Try.Success) return ExitCodes.FAILURE
 
         return ExitCodes.SUCCESS
@@ -237,9 +252,15 @@ open class NodeStartup : NodeStartupLogging {
             val name = nodeInfo.legalIdentitiesAndCerts.first().name.organisation
             Node.printBasicNodeInfo("Node for \"$name\" started up and registered in $elapsed sec")
 
-            // Don't start the shell if there's no console attached.
-            if (node.configuration.shouldStartLocalShell()) {
-                node.startupComplete.then {
+            // EG-197 luca.debiasi
+            // This change assure the node always try to reach startupComplete state
+            // and print basic node info.
+            // Then, if has a console attached, start the CRaSH shell.
+            // The reach of startupComplete completation is important to allow the properly stop the node later.
+            node.startupComplete.then {
+                Node.printBasicNodeInfo("Node for \"$name\" started up and registered in $elapsed sec")
+                // Don't start the shell if there's no console attached.
+                if (node.configuration.shouldStartLocalShell()) {
                     try {
                         InteractiveShell.runLocalShell(node::stop)
                     } catch (e: Exception) {
@@ -247,6 +268,8 @@ open class NodeStartup : NodeStartupLogging {
                     }
                 }
             }
+            //~ EG-197 luca.debiasi
+
             if (node.configuration.shouldStartSSHDaemon()) {
                 Node.printBasicNodeInfo("SSH server listening on port", node.configuration.sshd!!.port.toString())
             }
@@ -272,7 +295,7 @@ open class NodeStartup : NodeStartupLogging {
         logger.info("VM ${info.vmName} ${info.vmVendor} ${info.vmVersion}")
         logger.info("Machine: ${lookupMachineNameAndMaybeWarn()}")
         logger.info("Working Directory: ${cmdLineOptions.baseDirectory}")
-        JVMAgentUtilities.parseDebugPort(info.inputArguments) ?.let {
+        JVMAgentUtilities.parseDebugPort(info.inputArguments)?.let {
             logger.info("Debug port: $it")
         }
 
@@ -446,7 +469,9 @@ open class NodeStartup : NodeStartupLogging {
                     """  / ____/     _________/ /___ _""").newline().a(
                     """ / /     __  / ___/ __  / __ `/         """).fgBrightBlue().a(msg1).newline().fgBrightRed().a(
                     """/ /___  /_/ / /  / /_/ / /_/ /          """).fgBrightBlue().a(msg2).newline().fgBrightRed().a(
-                    """\____/     /_/   \__,_/\__,_/""").reset().newline().newline().fgBrightDefault().bold().a("--- ${versionInfo.vendor} ${versionInfo.releaseVersion} (${versionInfo.revision.take(7)}) -------------------------------------------------------------").newline().newline().reset())
+                    """\____/     /_/   \__,_/\__,_/""").reset().newline().newline().fgBrightDefault().bold()
+                    .a("--- ${versionInfo.vendor} ${versionInfo.releaseVersion} (${versionInfo.revision.take(7)}) -------------------------------------------------------------")
+                    .newline().newline().reset())
 
         }
     }
@@ -457,6 +482,7 @@ interface NodeStartupLogging {
     companion object {
         val logger by lazy { contextLogger() }
         val startupErrors = setOf(MultipleCordappsForFlowException::class, CheckpointIncompatibleException::class, AddressBindingException::class, NetworkParametersReader::class, DatabaseIncompatibleException::class)
+
         @Suppress("TooGenericExceptionCaught")
         val PRINT_ERRORS_TO_STD_ERR = try {
             System.getProperty("net.corda.node.printErrorsToStdErr") == "true"
@@ -472,15 +498,15 @@ interface NodeStartupLogging {
     fun Throwable.logAsExpected(message: String? = this.message, print: (String?) -> Unit = logger::error) = print(message)
 
     fun Throwable.logAsUnexpected(
-        message: String? = this.message,
-        error: Throwable = this,
-        print: (String?, Throwable) -> Unit = { s, e ->
-            logger.error(s, e)
-            if (PRINT_ERRORS_TO_STD_ERR) {
-                System.err.println(s)
-                e.printStackTrace()
+            message: String? = this.message,
+            error: Throwable = this,
+            print: (String?, Throwable) -> Unit = { s, e ->
+                logger.error(s, e)
+                if (PRINT_ERRORS_TO_STD_ERR) {
+                    System.err.println(s)
+                    e.printStackTrace()
+                }
             }
-        }
     ) {
         print("$message${this.message?.let { ": $it" } ?: ""}", error)
     }
