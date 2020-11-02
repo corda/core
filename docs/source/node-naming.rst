@@ -29,6 +29,8 @@ The name must also obey the following constraints:
 
     * The ``state``, ``organisational-unit`` and ``common name`` attributes are optional
 
+* For now, the maximum number of characters in the whole x500 name (across all 6 fields) is 128 characters.
+
 * The fields of the name have the following maximum character lengths:
 
     * Common name: 64
@@ -36,6 +38,7 @@ The name must also obey the following constraints:
     * Organisation unit: 64
     * Locality: 64
     * State: 64
+    * Country 2
 
 * The ``country`` attribute is a valid `ISO 3166-1<https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>` two letter code in upper-case
 
