@@ -92,7 +92,7 @@ buildscript {
     ext.hamkrest_version = '1.7.0.0'
     ext.jopt_simple_version = '5.0.2'
     ext.jansi_version = '1.18'
-    ext.hibernate_version = '5.4.14.Final'
+    ext.hibernate_version = '5.4.18.Final'
     ext.h2_version = '1.4.199' // Update docs if renamed or removed.
     ext.postgresql_version = '42.2.5'
     ext.rxjava_version = '1.3.8'
