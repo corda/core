@@ -18,7 +18,7 @@ dependencies {
 
     compile 'org.hamcrest:hamcrest-library:2.1'
     // Force a higher byte-buddy agent version to match the one Hibernate uses
-    compile "net.bytebuddy:byte-buddy-agent:1.10.2"
+    compile "net.bytebuddy:byte-buddy-agent:1.10.7"
     compile "com.nhaarman:mockito-kotlin:$mockito_kotlin_version"
     compile "org.mockito:mockito-core:$mockito_version"
     compile "org.assertj:assertj-core:$assertj_version"
