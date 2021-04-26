@@ -76,7 +76,7 @@ pipeline {
 
     post {
         always {
-            archiveArtifacts artifacts: '**/pod-logs/**/*.log', fingerprint: false
+            archiveArtifacts artifacts: '**/test-runs/**/build.out', fingerprint: false
             junit testResults: '**/build/test-results-xml/**/*.xml', keepLongStdio: true
         }
         cleanup {

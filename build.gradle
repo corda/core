@@ -158,6 +158,12 @@ buildscript {
         // because it is actually easier to pass that during parallel build.
         // NOTE: it has to be a name of a virtual repository with all
         // required remote or local repositories!
+
+        maven {
+            name "k8s-local-proxy"
+            url "http://nexus-service/repository/maven-public"
+        }
+
         if (System.getenv("CORDA_USE_CACHE")) {
             maven {
                 name "R3 Maven remote repositories"
@@ -214,7 +220,7 @@ buildscript {
         // Capsule gradle plugin forked and maintained locally to support Gradle 5.x
         // See https://github.com/corda/gradle-capsule-plugin
         classpath "us.kirchmeier:gradle-capsule-plugin:1.0.4_r3"
-        classpath group: "com.r3.testing", name: "gradle-distributed-testing-plugin", version: '1.3.0'
+        classpath group: "com.r3.testing", name: "gradle-distributed-testing-plugin", version: '1.3.1-SNAPSHOT'
         classpath "org.sonarsource.scanner.gradle:sonarqube-gradle-plugin:2.8"
     }
 
@@ -239,12 +245,12 @@ apply plugin: 'com.r3.testing.distributed-testing'
 
 // If the command line project option -PversionFromGit is added to the gradle invocation, we'll resolve 
 // the latest git commit hash and timestamp and create a version postfix from that
-if (project.hasProperty("versionFromGit")){
+if (project.hasProperty("versionFromGit")) {
     ext.versionSuffix = "${grgit.head().dateTime.format("yyyyMMdd_HHmmss")}-${grgit.head().abbreviatedId}"
 }
 
 // Need the `toString()` call on these, because they need to be converted from GStringImpl to Java Strings.
-if (ext.versionSuffix != ""){
+if (ext.versionSuffix != "") {
     ext.corda_release_version = "${ext.baseVersion}-${ext.versionSuffix}".toString()
 } else {
     ext.corda_release_version = "${ext.baseVersion}".toString()
@@ -384,10 +390,17 @@ allprojects {
 
     repositories {
         mavenLocal()
+
+        maven {
+            name "k8s-local-proxy"
+            url "http://nexus-service/repository/maven-public"
+        }
+
         // Use system environment to activate caching with Artifactory,
         // because it is actually easier to pass that during parallel build.
         // NOTE: it has to be a name of a virtual repository with all
         // required remote or local repositories!
+
         if (System.getenv("CORDA_USE_CACHE")) {
             maven {
                 name "R3 Maven remote repositories"
@@ -444,7 +457,7 @@ allprojects {
                 // Demand that everything uses our given version of Netty.
                 eachDependency { details ->
                     if (details.requested.group == 'io.netty' && details.requested.name.startsWith('netty-')) {
-                        if (details.requested.name.startsWith('netty-tcnative')){
+                        if (details.requested.name.startsWith('netty-tcnative')) {
                             details.useVersion tcnative_version
                         } else {
                             details.useVersion netty_version
@@ -545,19 +558,19 @@ task jacocoRootReport(type: org.gradle.testing.jacoco.tasks.JacocoReport) {
                     // these exclusions are necessary because jacoco gets confused by same class names
                     // which occur due to deterministic versions of non deterministic classes
                     exclude: ['**/net/corda/core/crypto/SHA256DigestSupplier**',
-                    '**/net/corda/core/crypto/DelegatingSecureRandomService',
-                    '**/net/corda/core/internal/ThreadLocalToggleField**',
-                    '**/net/corda/core/internal/InheritableThreadLocalToggleField**',
-                    '**/net/corda/core/internal/ToggleField**',
-                    'net/corda/core/internal/rules/StateContractValidationEnforcementRule**',
-                    'net/corda/core/internal/SimpleToggleField**',
-                    'net/corda/core/serialization/SerializationFactory**',
-                    'net/corda/serialization/internal/amqp/AMQPStreams**',
-                    'net/corda/serialization/internal/amqp/AMQPSerializerFactories**',
-                    'net/corda/serialization/internal/amqp/AMQPSerializationThreadContext**',
-                    'net/corda/serialization/internal/ByteBufferStreams**',
-                    'net/corda/serialization/internal/model/DefaultCacheProvider**',
-                    'net/corda/serialization/internal/DefaultWhitelist**'
+                              '**/net/corda/core/crypto/DelegatingSecureRandomService',
+                              '**/net/corda/core/internal/ThreadLocalToggleField**',
+                              '**/net/corda/core/internal/InheritableThreadLocalToggleField**',
+                              '**/net/corda/core/internal/ToggleField**',
+                              'net/corda/core/internal/rules/StateContractValidationEnforcementRule**',
+                              'net/corda/core/internal/SimpleToggleField**',
+                              'net/corda/core/serialization/SerializationFactory**',
+                              'net/corda/serialization/internal/amqp/AMQPStreams**',
+                              'net/corda/serialization/internal/amqp/AMQPSerializerFactories**',
+                              'net/corda/serialization/internal/amqp/AMQPSerializationThreadContext**',
+                              'net/corda/serialization/internal/ByteBufferStreams**',
+                              'net/corda/serialization/internal/model/DefaultCacheProvider**',
+                              'net/corda/serialization/internal/DefaultWhitelist**'
                     ])
         })
     }
@@ -733,19 +746,19 @@ buildScan {
 }
 
 distributedTesting {
-    profilesURL = 'https://raw.githubusercontent.com/corda/infrastructure-profiles/master'
+    profilesURL = projectDir.toURI()
 
     parallelTestGroups {
         allParallelIntegrationTest {
             testGroups 'integrationTest'
-            profile 'generalPurpose.yml'
+            profile = "integration.yaml"
             podLogLevel PodLogLevel.INFO
             distribution DistributeTestsBy.METHOD
         }
         allParallelUnitTest {
             podLogLevel PodLogLevel.INFO
             testGroups 'test'
-            profile 'generalPurpose.yml'
+            profile = "unit.yaml"
             distribution DistributeTestsBy.CLASS
         }
         allParallelUnitAndIntegrationTest {
@@ -766,6 +779,6 @@ distributedTesting {
     }
 
     ignoredTests = [
-        ':core-deterministic:testing:data:test'
+            ':core-deterministic:testing:data:test'
     ]
 }
