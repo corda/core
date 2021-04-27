@@ -252,12 +252,17 @@ tasks.withType(JavaCompile).configureEach {
     options.compilerArgs << '-proc:none'
 }
 
+def securityPolicy = file('permissive.policy').getAbsoluteFile()
+
 tasks.withType(Test).configureEach {
     if (JavaVersion.current() == JavaVersion.VERSION_11) {
         jvmArgs '-Djdk.attach.allowAttachSelf=true'
     }
     systemProperty 'deterministic-rt.path', configurations.jdkRt.asPath
     systemProperty 'deterministic-sources.path', configurations.deterministic.asPath
+    systemProperty 'java.security.manager', 'net.corda.core.BongoManager'
+    systemProperty 'java.security.policy', "=${securityPolicy.toURI()}"
+    testLogging.showStandardStreams = true
 }
 
 tasks.register('integrationTest', Test) {

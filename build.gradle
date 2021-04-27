@@ -215,7 +215,7 @@ buildscript {
         // Capsule gradle plugin forked and maintained locally to support Gradle 5.x
         // See https://github.com/corda/gradle-capsule-plugin
         classpath "us.kirchmeier:gradle-capsule-plugin:1.0.4_r3"
-        classpath group: "com.r3.testing", name: "gradle-distributed-testing-plugin", version: '1.3.0'
+        classpath group: "com.r3.testing", name: "gradle-distributed-testing-plugin", version: '1.3.2-SNAPSHOT'
         classpath "org.sonarsource.scanner.gradle:sonarqube-gradle-plugin:2.8"
     }
 

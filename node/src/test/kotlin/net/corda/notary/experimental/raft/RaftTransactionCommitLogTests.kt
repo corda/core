@@ -33,6 +33,7 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import java.time.Clock
+import java.time.Duration.ofMinutes
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
 import kotlin.test.assertEquals
@@ -60,9 +61,15 @@ class RaftTransactionCommitLogTests {
     @After
     fun tearDown() {
         LogHelper.reset("org.apache.activemq", "io.atomix")
-        cluster.map { it.client.close().asCordaFuture() }.transpose().getOrThrow()
-        cluster.map { it.server.shutdown().asCordaFuture() }.transpose().getOrThrow()
-        databases.forEach { it.close() }
+        try {
+            cluster.map { it.client.close().asCordaFuture() }.transpose().getOrThrow(ofMinutes(1))
+        } finally {
+            try {
+                cluster.map { it.server.shutdown().asCordaFuture() }.transpose().getOrThrow(ofMinutes(1))
+            } finally {
+                databases.forEach(CordaPersistence::close)
+            }
+        }
     }
 
     @Test(timeout=300_000)

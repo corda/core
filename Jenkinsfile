@@ -27,6 +27,7 @@ pipeline {
                 withCredentials([string(credentialsId: 'container_reg_passwd', variable: 'DOCKER_PUSH_PWD')]) {
                     sh "./gradlew --no-daemon " +
                             "-Dkubenetize=true " +
+                            "-DbuildId=\"\${BUILD_ID}\" " +
                             "-Ddocker.push.password=\"\${DOCKER_PUSH_PWD}\" " +
                             "-Ddocker.work.dir=\"/tmp/\${EXECUTOR_NUMBER}\" " +
                             "-Ddocker.container.env.parameter.CORDA_ARTIFACTORY_USERNAME=\"\${ARTIFACTORY_CREDENTIALS_USR}\" " +
@@ -76,7 +77,7 @@ pipeline {
 
     post {
         always {
-            archiveArtifacts artifacts: '**/pod-logs/**/*.log', fingerprint: false
+            archiveArtifacts artifacts: '**/pod-logs/**/*.log,**/test-runs/**/build.out,**/build/test-results-xml/**/*.xml', fingerprint: false
             junit testResults: '**/build/test-results-xml/**/*.xml', keepLongStdio: true
         }
         cleanup {
