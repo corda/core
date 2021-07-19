@@ -118,19 +118,31 @@ abstract class AbstractQueryCriteriaParser<Q : GenericQueryCriteria<Q,P>, in P: 
         }
     }
 
+    private fun stringCollectionComparisonToPredicate(
+            columnPredicate: CollectionExpression<*>,
+            column: Path<String?>,
+            literal: Collection<String>
+    ): Predicate {
+        return when (columnPredicate.operator) {
+            IN -> column.`in`(literal)
+            IN_IGNORE_CASE -> criteriaBuilder.upper(column).`in`(literal.map { it.toUpperCase() })
+            NOT_IN -> criteriaBuilder.not(column.`in`(literal))
+            NOT_IN_IGNORE_CASE -> criteriaBuilder.not(criteriaBuilder.upper(column).`in`(literal.map { it.toUpperCase() }))
+        }
+    }
+
     private fun collectionComparisonToPredicate(column: Path<out Any?>, columnPredicate: CollectionExpression<*>): Predicate {
-        val literal = columnPredicate.rightLiteral
+        val literal = if (columnPredicate.rightLiteral.isEmpty()) {
+            // This is needed because MS SQL does not allow writing IN statement with empty list,
+            // e.g this is invalid: "select 1 where 'a' in ()"
+            // To fix it we just insert a null into the list and the query becomes: "select 1 where 'a' in (null)"
+            listOf(null)
+        } else {
+            columnPredicate.rightLiteral
+        }
         return if (literal.any { it is String }) {
             @Suppress("UNCHECKED_CAST")
-            column as Path<String?>
-            @Suppress("UNCHECKED_CAST")
-            literal as Collection<String>
-            when (columnPredicate.operator) {
-                IN -> column.`in`(literal)
-                IN_IGNORE_CASE -> criteriaBuilder.upper(column).`in`(literal.map { it.toUpperCase() })
-                NOT_IN -> criteriaBuilder.not(column.`in`(literal))
-                NOT_IN_IGNORE_CASE -> criteriaBuilder.not(criteriaBuilder.upper(column).`in`(literal.map { it.toUpperCase() }))
-            }
+            stringCollectionComparisonToPredicate(columnPredicate, column as Path<String?>, literal as Collection<String>)
         } else {
             when (columnPredicate.operator) {
                 IN, IN_IGNORE_CASE -> column.`in`(literal)

@@ -1065,6 +1065,20 @@ abstract class VaultQueryTestsBase : VaultQueryParties {
     }
 
     @Test
+    fun `logical operator IN with empty parameters`() {
+        database.transaction {
+            listOf(USD, GBP, CHF).forEach {
+                vaultFiller.fillWithSomeTestCash(AMOUNT(100, it), notaryServices, 1, DUMMY_CASH_ISSUER)
+            }
+            val currencies = emptyList<String>()
+            val logicalExpression = builder { CashSchemaV1.PersistentCashState::currency.`in`(currencies) }
+            val criteria = VaultCustomQueryCriteria(logicalExpression)
+            val results = vaultService.queryBy<Cash.State>(criteria)
+            assertThat(results.states).hasSize(0)
+        }
+    }
+
+    @Test
     fun `logical operator NOT IN`() {
         database.transaction {
             listOf(USD, GBP, CHF).forEach {
