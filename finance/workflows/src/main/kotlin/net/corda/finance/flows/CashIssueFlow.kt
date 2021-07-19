@@ -2,6 +2,7 @@ package net.corda.finance.flows
 
 import co.paralleluniverse.fibers.Suspendable
 import net.corda.core.contracts.Amount
+import net.corda.core.crypto.SecureHash.Companion.SHA3_256
 import net.corda.core.flows.StartableByRPC
 import net.corda.core.identity.Party
 import net.corda.core.serialization.CordaSerializable
@@ -40,7 +41,7 @@ class CashIssueFlow(private val amount: Amount<Currency>,
     @Suspendable
     override fun call(): AbstractCashFlow.Result {
         progressTracker.currentStep = GENERATING_TX
-        val builder = TransactionBuilder(notary)
+        val builder = TransactionBuilder(notary).setHashAlgorithm(SHA3_256)
         val issuer = ourIdentity.ref(issuerBankPartyRef)
         val signers = Cash().generateIssue(builder, amount.issuedBy(issuer), ourIdentity, notary)
         progressTracker.currentStep = SIGNING_TX

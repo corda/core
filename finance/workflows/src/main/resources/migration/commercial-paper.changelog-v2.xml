@@ -3,9 +3,9 @@
                    xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.5.xsd">
-
-    <include file="migration/commercial-paper.changelog-init.xml"/>
-    <include file="migration/commercial-paper.changelog-v1.xml"/>
-    <include file="migration/commercial-paper.changelog-v2.xml"/>
-
+    <changeSet id="extend_commercial_paper_transaction_id" author="R3.Corda">
+        <modifyDataType tableName="cp_states"
+                        columnName="transaction_id"
+                        newDataType="NVARCHAR(80)"/>
+    </changeSet>
 </databaseChangeLog>

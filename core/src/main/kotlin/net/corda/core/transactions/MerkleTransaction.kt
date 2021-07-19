@@ -260,7 +260,7 @@ class FilteredTransaction internal constructor(
             // If we don't receive elements of a particular component, check if its ordinal is bigger that the
             // groupHashes.size or if the group hash is allOnesHash,
             // to ensure there were indeed no elements in the original wire transaction.
-            visibilityCheck(componentGroupEnum.ordinal >= groupHashes.size || groupHashes[componentGroupEnum.ordinal] == SecureHash.allOnesHash) {
+            visibilityCheck(componentGroupEnum.ordinal >= groupHashes.size || groupHashes[componentGroupEnum.ordinal] == SecureHash.allOnesHashFor(id.algorithm)) {
                 "Did not receive components for group ${componentGroupEnum.ordinal} and cannot verify they didn't exist in the original wire transaction"
             }
         } else {

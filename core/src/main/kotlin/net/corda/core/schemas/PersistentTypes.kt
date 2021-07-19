@@ -4,7 +4,6 @@ import net.corda.core.KeepForDJVM
 import net.corda.core.contracts.ContractState
 import net.corda.core.contracts.StateRef
 import net.corda.core.serialization.CordaSerializable
-import net.corda.core.utilities.toHexString
 import org.hibernate.annotations.Immutable
 import java.io.Serializable
 import javax.persistence.Column
@@ -90,16 +89,15 @@ class PersistentState(@EmbeddedId override var stateRef: PersistentStateRef? = n
 @KeepForDJVM
 @Embeddable
 @Immutable
-
 data class PersistentStateRef(
         @Suppress("MagicNumber") // column width
-        @Column(name = "transaction_id", length = 64, nullable = false)
+        @Column(name = "transaction_id", length = 80, nullable = false)
         var txId: String,
 
         @Column(name = "output_index", nullable = false)
         var index: Int
 ) : Serializable {
-    constructor(stateRef: StateRef) : this(stateRef.txhash.bytes.toHexString(), stateRef.index)
+    constructor(stateRef: StateRef) : this(stateRef.txhash.toString(), stateRef.index)
 }
 
 /**

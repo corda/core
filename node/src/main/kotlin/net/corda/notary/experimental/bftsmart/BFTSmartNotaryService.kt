@@ -132,7 +132,7 @@ class BFTSmartNotaryService(
     @Table(name = "${NODE_DATABASE_PREFIX}bft_committed_txs")
     class CommittedTransaction(
             @Id
-            @Column(name = "transaction_id", nullable = false, length = 64)
+            @Column(name = "transaction_id", nullable = false, length = 80)
             val transactionId: String
     )
 
@@ -150,8 +150,8 @@ class BFTSmartNotaryService(
                     val txId = it.id.txId
                     val index = it.id.index
                     Pair(
-                            StateRef(txhash = SecureHash.parse(txId), index = index),
-                            SecureHash.parse(it.consumingTxHash)
+                            StateRef(txhash = SecureHash.create(txId), index = index),
+                            SecureHash.create(it.consumingTxHash)
                     )
                 },
                 toPersistentEntity = { (txHash, index): StateRef, id: SecureHash ->

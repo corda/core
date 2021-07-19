@@ -21,7 +21,7 @@ class SellerFlow(private val otherParty: Party,
     constructor(otherParty: Party, amount: Amount<Currency>) : this(otherParty, amount, tracker())
 
     companion object {
-        val PROSPECTUS_HASH = SecureHash.parse("decd098666b9657314870e192ced0c3519c2c9d395507a238338f8d003929de9")
+        val PROSPECTUS_HASH = SecureHash.create("decd098666b9657314870e192ced0c3519c2c9d395507a238338f8d003929de9")
 
         object SELF_ISSUING : ProgressTracker.Step("Got session ID back, issuing and timestamping some commercial paper")
 

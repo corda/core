@@ -235,7 +235,7 @@ class TransactionViewer : CordaView("Transactions") {
                         }
                         override fun computeValue(): SecureHash {
                             return if (hashList.isEmpty()) SecureHash.zeroHash
-                            else hashList.fold(hashList[0], { one, another -> one.hashConcat(another) })
+                            else hashList.fold(hashList[0], { one, another -> one.concatenate(another) })
                         }
                     }
                     graphicProperty().bind(hashBinding.map { identicon(it, 30.0) })

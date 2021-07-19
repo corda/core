@@ -30,7 +30,7 @@ class InternalMockAttachmentStorage(storage: MockAttachmentStorage) : Attachment
         return try {
             importAttachment(jar, uploader, filename)
         } catch (faee: java.nio.file.FileAlreadyExistsException) {
-            AttachmentId.parse(faee.message!!)
+            AttachmentId.create(faee.message!!)
         }
     }
 

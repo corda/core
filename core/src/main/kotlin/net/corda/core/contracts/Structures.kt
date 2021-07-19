@@ -153,6 +153,9 @@ interface SchedulableState : ContractState {
 /** Returns the SHA-256 hash of the serialised contents of this state (not cached!) */
 fun ContractState.hash(): SecureHash = SecureHash.sha256(serialize().bytes)
 
+/** Returns the hash of the serialised contents of this state (not cached!) */
+fun ContractState.hash(algorithm: String): SecureHash = SecureHash.hashAs(algorithm, serialize().bytes)
+
 /**
  * A stateref is a pointer (reference) to a state, this is an equivalent of an "outpoint" in Bitcoin. It records which
  * transaction defined the state and where in that transaction it was.
@@ -324,13 +327,32 @@ interface UpgradedContractWithLegacyConstraint<in OldState : ContractState, out 
 @CordaSerializable
 @KeepForDJVM
 class PrivacySalt(bytes: ByteArray) : OpaqueBytes(bytes) {
+    /** Constructs a salt with a randomly-generated saltLength byte value. */
+    @DeleteForDJVM
+    constructor(saltLength: Int) : this(secureRandomBytes(saltLength))
+
     /** Constructs a salt with a randomly-generated 32 byte value. */
     @DeleteForDJVM
-    constructor() : this(secureRandomBytes(32))
+    constructor() : this(MINIMUM_SIZE)
 
     init {
-        require(bytes.size == 32) { "Privacy salt should be 32 bytes." }
         require(bytes.any { it != 0.toByte() }) { "Privacy salt should not be all zeros." }
+        require(bytes.size >= MINIMUM_SIZE) { "Privacy salt should be at least $MINIMUM_SIZE bytes." }
+    }
+
+    fun validateFor(algorithm: String) {
+        val digestLength = SecureHash.digestLengthFor(algorithm)
+        require(bytes.size >= digestLength) { "Privacy salt should be at least $digestLength bytes for $algorithm." }
+    }
+
+    companion object {
+        private const val MINIMUM_SIZE = 32
+
+        @DeleteForDJVM
+        @JvmStatic
+        fun createFor(algorithm: String): PrivacySalt {
+            return PrivacySalt(SecureHash.digestLengthFor(algorithm))
+        }
     }
 }
 

@@ -6,4 +6,5 @@
     <include file="migration/notary-raft.changelog-init.xml"/>
     <include file="migration/notary-raft.changelog-v1.xml"/>
     <include file="migration/notary-raft.changelog-committed-transactions-table.xml" />
+    <include file="migration/notary-raft.changelog-v2.xml"/>
 </databaseChangeLog>

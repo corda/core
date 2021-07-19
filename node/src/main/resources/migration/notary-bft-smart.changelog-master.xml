@@ -7,4 +7,5 @@
     <include file="migration/notary-bft-smart.changelog-v1.xml"/>
     <include file="migration/notary-bft-smart.changelog-pkey.xml"/>
     <include file="migration/notary-bft-smart.changelog-committed-transactions-table.xml"/>
+    <include file="migration/notary-bft-smart.changelog-v2.xml"/>
 </databaseChangeLog>

@@ -151,7 +151,7 @@ object VaultSchemaV1 : MappedSchema(
             @Column(name = "seq_no", nullable = false)
             var seqNo: Int,
 
-            @Column(name = "transaction_id", length = 64, nullable = true)
+            @Column(name = "transaction_id", length = 80, nullable = true)
             var txId: String?,
 
             @Column(name = "note", nullable = true)

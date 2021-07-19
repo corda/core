@@ -12,4 +12,5 @@
     <include file="migration/vault-schema.changelog-v7.xml"/>
     <include file="migration/vault-schema.changelog-v8.xml"/>
     <include file="migration/vault-schema.changelog-v11.xml"/>
+    <include file="migration/vault-schema.changelog-v12.xml"/>
 </databaseChangeLog>

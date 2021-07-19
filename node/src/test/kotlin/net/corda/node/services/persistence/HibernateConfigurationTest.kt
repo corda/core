@@ -953,7 +953,7 @@ class HibernateConfigurationTest {
             // DOCEND JdbcSession
             var count = 0
             while (rs.next()) {
-                val stateRef = StateRef(SecureHash.parse(rs.getString(1)), rs.getInt(2))
+                val stateRef = StateRef(SecureHash.create(rs.getString(1)), rs.getInt(2))
                 Assert.assertTrue(cashStates.map { it.ref }.contains(stateRef))
                 count++
             }
@@ -962,7 +962,7 @@ class HibernateConfigurationTest {
     }
 
     private fun toStateRef(pStateRef: PersistentStateRef): StateRef {
-        return StateRef(SecureHash.parse(pStateRef.txId), pStateRef.index)
+        return StateRef(SecureHash.create(pStateRef.txId), pStateRef.index)
     }
 
     @Test(timeout=300_000)

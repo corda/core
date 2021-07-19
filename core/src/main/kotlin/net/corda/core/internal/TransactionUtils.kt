@@ -3,8 +3,9 @@ package net.corda.core.internal
 import net.corda.core.KeepForDJVM
 import net.corda.core.contracts.*
 import net.corda.core.crypto.SecureHash
+import net.corda.core.crypto.SecureHash.Companion.SHA2_256
 import net.corda.core.crypto.componentHash
-import net.corda.core.crypto.sha256
+import net.corda.core.crypto.hashAs
 import net.corda.core.flows.FlowLogic
 import net.corda.core.identity.Party
 import net.corda.core.serialization.*
@@ -19,9 +20,19 @@ class NotaryChangeTransactionBuilder(val inputs: List<StateRef>,
                                      val notary: Party,
                                      val newNotary: Party,
                                      val networkParametersHash: SecureHash) {
+    var hashAlgorithm = SHA2_256
+        set(value) {
+            field = value.toUpperCase()
+        }
+
+    fun setHashAlgorithm(hashAlgorithm: String): NotaryChangeTransactionBuilder {
+        this.hashAlgorithm = hashAlgorithm
+        return this
+    }
+
     fun build(): NotaryChangeWireTransaction {
         val components = listOf(inputs, notary, newNotary, networkParametersHash).map { it.serialize() }
-        return NotaryChangeWireTransaction(components)
+        return NotaryChangeWireTransaction(components, hashAlgorithm)
     }
 }
 
@@ -32,11 +43,29 @@ class ContractUpgradeTransactionBuilder(
         val legacyContractAttachmentId: SecureHash,
         val upgradedContractClassName: ContractClassName,
         val upgradedContractAttachmentId: SecureHash,
-        val privacySalt: PrivacySalt = PrivacySalt(),
+        privacySalt: PrivacySalt = PrivacySalt(),
         val networkParametersHash: SecureHash) {
+    var privacySalt: PrivacySalt = privacySalt
+        private set
+
+    var hashAlgorithm = SHA2_256
+        set(value) {
+            field = value.toUpperCase()
+        }
+
+    fun setHashAlgorithm(hashAlgorithm: String): ContractUpgradeTransactionBuilder {
+        this.hashAlgorithm = hashAlgorithm
+        return this
+    }
+
+    fun resalt(): ContractUpgradeTransactionBuilder {
+        privacySalt = PrivacySalt.createFor(hashAlgorithm)
+        return this
+    }
+
     fun build(): ContractUpgradeWireTransaction {
         val components = listOf(inputs, notary, legacyContractAttachmentId, upgradedContractClassName, upgradedContractAttachmentId, networkParametersHash).map { it.serialize() }
-        return ContractUpgradeWireTransaction(components, privacySalt)
+        return ContractUpgradeWireTransaction(components, privacySalt, hashAlgorithm)
     }
 }
 
@@ -46,7 +75,7 @@ fun combinedHash(components: Iterable<SecureHash>): SecureHash {
     components.forEach {
         stream.write(it.bytes)
     }
-    return stream.toByteArray().sha256()
+    return stream.toByteArray().hashAs(components.first().algorithm)
 }
 
 /**

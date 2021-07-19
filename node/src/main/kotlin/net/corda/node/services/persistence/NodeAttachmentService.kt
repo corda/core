@@ -102,7 +102,7 @@ class NodeAttachmentService @JvmOverloads constructor(
                     throw SecurityException("Signed jar has been tampered with. Files ${allManifestEntries} have been removed.")
                 }
                 val extraSignableFiles = extraFilesNotFoundInEntries.filterNot { JarSignatureCollector.isNotSignable(it) }
-                if (extraSignableFiles.size > 0) {
+                if (extraSignableFiles.isNotEmpty()) {
                     throw SecurityException("Signed jar has been tampered with. Files ${extraSignableFiles} have been added to the JAR.")
                 }
             }
@@ -173,7 +173,7 @@ class NodeAttachmentService @JvmOverloads constructor(
      * this will provide an additional safety check against user error.
      */
     @VisibleForTesting
-    class HashCheckingStream(val expected: SecureHash.SHA256,
+    class HashCheckingStream(val expected: SecureHash,
                              val expectedSize: Int,
                              input: InputStream,
                              private val counter: CountingInputStream = CountingInputStream(input),
@@ -288,7 +288,7 @@ class NodeAttachmentService @JvmOverloads constructor(
 
     private fun createAttachmentFromDatabase(attachment: DBAttachment): Attachment {
         val attachmentImpl = AttachmentImpl(
-            id = SecureHash.parse(attachment.attId),
+            id = SecureHash.create(attachment.attId),
             dataLoader = { attachment.content },
             checkOnLoad = checkAttachmentsOnLoad,
             uploader = attachment.uploader,
@@ -358,7 +358,7 @@ class NodeAttachmentService @JvmOverloads constructor(
         return try {
             import(jar, uploader, filename)
         } catch (faee: java.nio.file.FileAlreadyExistsException) {
-            AttachmentId.parse(faee.message!!)
+            AttachmentId.create(faee.message!!)
         }
     }
 
@@ -454,7 +454,7 @@ class NodeAttachmentService @JvmOverloads constructor(
         return try {
             import(jar, UNKNOWN_UPLOADER, null)
         } catch (faee: java.nio.file.FileAlreadyExistsException) {
-            AttachmentId.parse(faee.message!!)
+            AttachmentId.create(faee.message!!)
         }
     }
 
@@ -464,7 +464,7 @@ class NodeAttachmentService @JvmOverloads constructor(
             createAttachmentsIdsQuery(
                 criteria,
                 sorting
-            ).resultList.map { AttachmentId.parse(it) }
+            ).resultList.map { AttachmentId.create(it) }
         }
     }
 
@@ -477,7 +477,7 @@ class NodeAttachmentService @JvmOverloads constructor(
 
         val criteriaQuery = criteriaBuilder.createQuery(String::class.java)
         val root = criteriaQuery.from(DBAttachment::class.java)
-        criteriaQuery.select(root.get("${DBAttachment::attId.name}"))
+        criteriaQuery.select(root.get(DBAttachment::attId.name))
 
         val criteriaParser = HibernateAttachmentQueryCriteriaParser<DBAttachment,String>(
                 criteriaBuilder,
@@ -562,12 +562,12 @@ class NodeAttachmentService @JvmOverloads constructor(
     }
 
     private fun makeAttachmentIds(it: Map.Entry<Int, List<DBAttachment>>, contractClassName: String): Pair<Version, AttachmentIds> {
-        val signed = it.value.filter { it.signers?.isNotEmpty() ?: false }.map { AttachmentId.parse(it.attId) }
+        val signed = it.value.filter { it.signers?.isNotEmpty() ?: false }.map { AttachmentId.create(it.attId) }
         if (!devMode)
             check(signed.size <= 1) //sanity check
         else
             log.warn("(Dev Mode) Multiple signed attachments ${signed.map { it.toString() }} for contract $contractClassName version '${it.key}'.")
-        val unsigned = it.value.filter { it.signers?.isEmpty() ?: true }.map { AttachmentId.parse(it.attId) }
+        val unsigned = it.value.filter { it.signers?.isEmpty() ?: true }.map { AttachmentId.create(it.attId) }
         if (unsigned.size > 1)
             log.warn("Selecting attachment ${unsigned.first()} from duplicated, unsigned attachments ${unsigned.map { it.toString() }} for contract $contractClassName version '${it.key}'.")
         return it.key to AttachmentIds(signed.firstOrNull(), unsigned.firstOrNull())

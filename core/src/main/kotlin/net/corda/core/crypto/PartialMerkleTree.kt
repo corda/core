@@ -3,7 +3,6 @@ package net.corda.core.crypto
 import net.corda.core.CordaException
 import net.corda.core.CordaInternal
 import net.corda.core.KeepForDJVM
-import net.corda.core.crypto.SecureHash.Companion.zeroHash
 import net.corda.core.serialization.CordaSerializable
 import java.util.*
 
@@ -70,9 +69,9 @@ class PartialMerkleTree(val root: PartialTree) {
          */
         @Throws(IllegalArgumentException::class, MerkleTreeException::class)
         fun build(merkleRoot: MerkleTree, includeHashes: List<SecureHash>): PartialMerkleTree {
-            val usedHashes = ArrayList<SecureHash>()
-            require(zeroHash !in includeHashes) { "Zero hashes shouldn't be included in partial tree." }
+            require(includeHashes.none(SecureHash::isZero)) { "Zero hashes shouldn't be included in partial tree." }
             checkFull(merkleRoot) // Throws MerkleTreeException if it is not a full binary tree.
+            val usedHashes = ArrayList<SecureHash>()
             val tree = buildPartialTree(merkleRoot, includeHashes, usedHashes)
             // Too many included hashes or different ones.
             if (includeHashes.size != usedHashes.size)
@@ -144,7 +143,7 @@ class PartialMerkleTree(val root: PartialTree) {
                 is PartialTree.Node -> {
                     val leftHash = rootAndUsedHashes(node.left, usedHashes)
                     val rightHash = rootAndUsedHashes(node.right, usedHashes)
-                    leftHash.hashConcat(rightHash)
+                    leftHash.concatenate(rightHash)
                 }
             }
         }

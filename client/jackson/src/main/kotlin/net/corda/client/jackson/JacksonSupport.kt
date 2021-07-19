@@ -396,7 +396,7 @@ object JacksonSupport {
     class SecureHashDeserializer<T : SecureHash> : JsonDeserializer<T>() {
         override fun deserialize(parser: JsonParser, context: DeserializationContext): T {
             try {
-                return uncheckedCast(SecureHash.parse(parser.text))
+                return uncheckedCast(SecureHash.create(parser.text))
             } catch (e: Exception) {
                 throw JsonParseException(parser, "Invalid hash ${parser.text}: ${e.message}")
             }

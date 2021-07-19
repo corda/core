@@ -2,6 +2,7 @@ package net.corda.finance.workflows
 
 import co.paralleluniverse.fibers.Suspendable
 import net.corda.core.contracts.*
+import net.corda.core.crypto.SecureHash.Companion.SHA3_256
 import net.corda.core.identity.AbstractParty
 import net.corda.core.identity.Party
 import net.corda.core.identity.PartyAndCertificate
@@ -21,7 +22,7 @@ object CommercialPaperUtils {
     @JvmStatic
     fun generateIssue(issuance: PartyAndReference, faceValue: Amount<Issued<Currency>>, maturityDate: Instant, notary: Party): TransactionBuilder {
         val state = CommercialPaper.State(issuance, issuance.party, faceValue, maturityDate)
-        return TransactionBuilder(notary = notary).withItems(
+        return TransactionBuilder(notary = notary).setHashAlgorithm(SHA3_256).withItems(
                 StateAndContract(state, CommercialPaper.CP_PROGRAM_ID),
                 Command(CommercialPaper.Commands.Issue(), issuance.party.owningKey)
         )

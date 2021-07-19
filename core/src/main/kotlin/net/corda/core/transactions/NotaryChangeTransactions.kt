@@ -5,13 +5,15 @@ import net.corda.core.DeleteForDJVM
 import net.corda.core.KeepForDJVM
 import net.corda.core.contracts.*
 import net.corda.core.crypto.SecureHash
+import net.corda.core.crypto.SecureHash.Companion.SHA2_256
 import net.corda.core.crypto.TransactionSignature
-import net.corda.core.crypto.sha256
+import net.corda.core.crypto.hashAs
 import net.corda.core.identity.Party
 import net.corda.core.node.NetworkParameters
 import net.corda.core.node.ServiceHub
 import net.corda.core.node.ServicesForResolution
 import net.corda.core.serialization.CordaSerializable
+import net.corda.core.serialization.DeprecatedConstructorForDeserialization
 import net.corda.core.serialization.SerializedBytes
 import net.corda.core.serialization.deserialize
 import net.corda.core.serialization.serialize
@@ -33,8 +35,16 @@ data class NotaryChangeWireTransaction(
          * This is used for calculating the transaction id in a deterministic fashion, since re-serializing properties
          * may result in a different byte sequence depending on the serialization context.
          */
-        val serializedComponents: List<OpaqueBytes>
+        val serializedComponents: List<OpaqueBytes>,
+        val hashAlgorithm: String
 ) : CoreTransaction() {
+    @DeprecatedConstructorForDeserialization(1)
+    constructor(serializedComponents: List<OpaqueBytes>) : this(serializedComponents, SHA2_256)
+
+    fun copy(serializedComponents: List<OpaqueBytes>): NotaryChangeWireTransaction {
+        return NotaryChangeWireTransaction(serializedComponents, hashAlgorithm)
+    }
+
     override val inputs: List<StateRef> = serializedComponents[INPUTS.ordinal].deserialize()
     override val references: List<StateRef> = emptyList()
     override val notary: Party = serializedComponents[NOTARY.ordinal].deserialize()
@@ -68,9 +78,9 @@ data class NotaryChangeWireTransaction(
      */
     override val id: SecureHash by lazy {
         serializedComponents.map { component ->
-            component.bytes.sha256()
+            component.bytes.hashAs(hashAlgorithm)
         }.reduce { combinedHash, componentHash ->
-            combinedHash.hashConcat(componentHash)
+            combinedHash.concatenate(componentHash)
         }
     }
 

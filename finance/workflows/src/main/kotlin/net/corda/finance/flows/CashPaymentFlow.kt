@@ -4,6 +4,7 @@ import co.paralleluniverse.fibers.Suspendable
 import net.corda.confidential.SwapIdentitiesFlow
 import net.corda.core.contracts.Amount
 import net.corda.core.contracts.InsufficientBalanceException
+import net.corda.core.crypto.SecureHash.Companion.SHA3_256
 import net.corda.core.flows.*
 import net.corda.core.identity.AbstractParty
 import net.corda.core.identity.Party
@@ -59,7 +60,7 @@ open class CashPaymentFlow(
             recipient
         }
         progressTracker.currentStep = GENERATING_TX
-        val builder = TransactionBuilder(notary = notary ?: serviceHub.networkMapCache.notaryIdentities.first())
+        val builder = TransactionBuilder(notary = notary ?: serviceHub.networkMapCache.notaryIdentities.first()).setHashAlgorithm(SHA3_256)
         logger.info("Generating spend for: ${builder.lockId}")
         // TODO: Have some way of restricting this to states the caller controls
         val (spendTX, keysForSigning) = try {

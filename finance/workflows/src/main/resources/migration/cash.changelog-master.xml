@@ -6,5 +6,6 @@
 
     <include file="migration/cash.changelog-init.xml"/>
     <include file="migration/cash.changelog-v1.xml"/>
+    <include file="migration/cash.changelog-v2.xml"/>
 
 </databaseChangeLog>

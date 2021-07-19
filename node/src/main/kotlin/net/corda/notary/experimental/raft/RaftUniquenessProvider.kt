@@ -92,7 +92,13 @@ class RaftUniquenessProvider(
                 )
 
         fun StateRef.encoded() = "$txhash:$index"
-        fun String.parseStateRef() = split(":").let { StateRef(SecureHash.parse(it[0]), it[1].toInt()) }
+        fun String.parseStateRef(): StateRef {
+            val idx = lastIndexOf(':')
+            require(idx != -1) {
+                "Encoding error for StateRef '$this'"
+            }
+            return StateRef(SecureHash.create(substring(0, idx)), substring(idx + 1).toInt())
+        }
     }
 
     @Entity
@@ -115,7 +121,7 @@ class RaftUniquenessProvider(
     @Table(name = "${NODE_DATABASE_PREFIX}raft_committed_txs")
     class CommittedTransaction(
             @Id
-            @Column(name = "transaction_id", nullable = false, length = 64)
+            @Column(name = "transaction_id", nullable = false, length = 80)
             val transactionId: String
     )
 

@@ -3,6 +3,7 @@ package net.corda.finance.flows
 import co.paralleluniverse.fibers.Suspendable
 import net.corda.core.contracts.Amount
 import net.corda.core.contracts.InsufficientBalanceException
+import net.corda.core.crypto.SecureHash.Companion.SHA3_256
 import net.corda.core.flows.*
 import net.corda.core.node.services.queryBy
 import net.corda.core.node.services.vault.DEFAULT_PAGE_NUM
@@ -47,7 +48,7 @@ class CashExitFlow(private val amount: Amount<Currency>,
     @Throws(CashException::class)
     override fun call(): AbstractCashFlow.Result {
         progressTracker.currentStep = GENERATING_TX
-        val builder = TransactionBuilder(notary = null)
+        val builder = TransactionBuilder(notary = null).setHashAlgorithm(SHA3_256)
         val issuer = ourIdentity.ref(issuerRef)
         val exitStates = AbstractCashSelection
                 .getInstance { serviceHub.jdbcSession().metaData }

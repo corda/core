@@ -38,7 +38,7 @@ class AttachmentDownloadServlet : HttpServlet() {
         }
 
         try {
-            val hash = SecureHash.parse(reqPath.substringBefore('/'))
+            val hash = SecureHash.create(reqPath.substringBefore('/'))
             val rpc = servletContext.getAttribute("rpc") as CordaRPCOps
             val attachment = rpc.openAttachment(hash)
 

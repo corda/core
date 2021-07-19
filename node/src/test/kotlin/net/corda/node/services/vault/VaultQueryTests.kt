@@ -647,7 +647,7 @@ abstract class VaultQueryTestsBase : VaultQueryParties {
         database.transaction {
             vaultFiller.fillWithSomeTestLinearStates(8)
             val issuedStates = vaultFiller.fillWithSomeTestLinearStates(2)
-            val stateRefs = issuedStates.states.map { it.ref }.toList()
+            val stateRefs = issuedStates.states.map { it.ref }
 
             // DOCSTART VaultQueryExample2
             val sortAttribute = SortAttribute.Standard(Sort.CommonStateAttribute.STATE_REF_TXN_ID)
@@ -657,7 +657,7 @@ abstract class VaultQueryTestsBase : VaultQueryParties {
 
             assertThat(results.states).hasSize(2)
 
-            val sortedStateRefs = stateRefs.sortedBy { it.txhash.bytes.toHexString() }
+            val sortedStateRefs = stateRefs.sortedBy { it.txhash.toString() }
             assertThat(results.states.first().ref).isEqualTo(sortedStateRefs.first())
             assertThat(results.states.last().ref).isEqualTo(sortedStateRefs.last())
         }

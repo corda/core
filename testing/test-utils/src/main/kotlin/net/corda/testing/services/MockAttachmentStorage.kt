@@ -83,7 +83,7 @@ class MockAttachmentStorage : AttachmentStorage, SingletonSerializeAsToken() {
         return try {
             importAttachment(jar, UNKNOWN_UPLOADER, null)
         } catch (e: java.nio.file.FileAlreadyExistsException) {
-            AttachmentId.parse(e.message!!)
+            AttachmentId.create(e.message!!)
         }
     }
 

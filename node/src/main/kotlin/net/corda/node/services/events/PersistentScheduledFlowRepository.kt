@@ -27,7 +27,7 @@ class PersistentScheduledFlowRepository(val database: CordaPersistence) : Schedu
     private fun fromPersistentEntity(scheduledStateRecord: NodeSchedulerService.PersistentScheduledState): Pair<StateRef, ScheduledStateRef> {
         val txId = scheduledStateRecord.output.txId
         val index = scheduledStateRecord.output.index
-        return Pair(StateRef(SecureHash.parse(txId), index), ScheduledStateRef(StateRef(SecureHash.parse(txId), index), scheduledStateRecord.scheduledAt))
+        return Pair(StateRef(SecureHash.create(txId), index), ScheduledStateRef(StateRef(SecureHash.create(txId), index), scheduledStateRecord.scheduledAt))
     }
 
     override fun delete(key: StateRef): Boolean {

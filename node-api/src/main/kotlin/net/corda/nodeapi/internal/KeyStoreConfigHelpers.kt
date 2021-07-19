@@ -119,7 +119,7 @@ const val DEV_CA_TRUST_STORE_PRIVATE_KEY_PASS: String = "trustpasskeypass"
 // https://github.com/corda/corda-gradle-plugins/blob/master/cordapp/src/main/resources/certificates/cordadevcodesign.jks
 const val DEV_CORDAPP_CODE_SIGNING_STR = "AA59D829F2CA8FDDF5ABEA40D815F937E3E54E572B65B93B5C216AE6594E7D6B"
 
-val DEV_PUB_KEY_HASHES: List<SecureHash.SHA256> get() = listOf(DEV_INTERMEDIATE_CA.certificate, DEV_ROOT_CA.certificate).map { it.publicKey.hash.sha256() } + SecureHash.parse(DEV_CORDAPP_CODE_SIGNING_STR).sha256()
+val DEV_PUB_KEY_HASHES: List<SecureHash> get() = listOf(DEV_INTERMEDIATE_CA.certificate, DEV_ROOT_CA.certificate).map { it.publicKey.hash.sha256() } + SecureHash.create(DEV_CORDAPP_CODE_SIGNING_STR).sha256()
 
 // We need a class so that we can get hold of the class loader
 internal object DevCaHelper {

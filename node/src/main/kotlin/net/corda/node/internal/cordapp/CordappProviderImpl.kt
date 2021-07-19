@@ -100,7 +100,7 @@ open class CordappProviderImpl(val cordappLoader: CordappLoader,
                             )
                         }
                     } catch (faee: java.nio.file.FileAlreadyExistsException) {
-                        AttachmentId.parse(faee.message!!)
+                        AttachmentId.create(faee.message!!)
                     }
                 } to cordapp.jarPath
             }.toMap()

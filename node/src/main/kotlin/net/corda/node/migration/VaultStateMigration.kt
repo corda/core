@@ -58,7 +58,7 @@ class VaultStateMigration : CordaMigration() {
     private fun getStateAndRef(persistentState: VaultSchemaV1.VaultStates): StateAndRef<ContractState> {
         val persistentStateRef = persistentState.stateRef ?:
                 throw VaultStateMigrationException("Persistent state ref missing from state")
-        val txHash = SecureHash.parse(persistentStateRef.txId)
+        val txHash = SecureHash.create(persistentStateRef.txId)
         val stateRef = StateRef(txHash, persistentStateRef.index)
         val state = try {
             servicesForResolution.loadState(stateRef)

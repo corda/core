@@ -4,6 +4,7 @@ import net.corda.core.CordaInternal
 import net.corda.core.KeepForDJVM
 import net.corda.core.contracts.*
 import net.corda.core.crypto.SecureHash
+import net.corda.core.crypto.SecureHash.Companion.SHA2_256
 import net.corda.core.crypto.TransactionSignature
 import net.corda.core.crypto.componentHash
 import net.corda.core.crypto.computeNonce
@@ -14,6 +15,7 @@ import net.corda.core.internal.combinedHash
 import net.corda.core.node.NetworkParameters
 import net.corda.core.node.ServicesForResolution
 import net.corda.core.serialization.CordaSerializable
+import net.corda.core.serialization.DeprecatedConstructorForDeserialization
 import net.corda.core.serialization.SerializedBytes
 import net.corda.core.serialization.deserialize
 import net.corda.core.serialization.internal.AttachmentsClassLoaderBuilder
@@ -42,8 +44,13 @@ data class ContractUpgradeWireTransaction(
          */
         val serializedComponents: List<OpaqueBytes>,
         /** Required for hiding components in [ContractUpgradeFilteredTransaction]. */
-        val privacySalt: PrivacySalt = PrivacySalt()
+        val privacySalt: PrivacySalt,
+        val hashAlgorithm: String
 ) : CoreTransaction() {
+    @DeprecatedConstructorForDeserialization(1)
+    constructor(serializedComponents: List<OpaqueBytes>, privacySalt: PrivacySalt = PrivacySalt())
+         : this(serializedComponents, privacySalt, SHA2_256)
+
     companion object {
         /**
          * Runs the explicit upgrade logic.
@@ -83,6 +90,14 @@ data class ContractUpgradeWireTransaction(
     init {
         check(inputs.isNotEmpty()) { "A contract upgrade transaction must have inputs" }
         checkBaseInvariants()
+        privacySalt.validateFor(hashAlgorithm)
+    }
+
+    /**
+     * Old version of [ContractUpgradeWireTransaction.copy] for sake of ABI compatibility.
+     */
+    fun copy(serializedComponents: List<OpaqueBytes>, privacySalt: PrivacySalt): ContractUpgradeWireTransaction {
+        return ContractUpgradeWireTransaction(serializedComponents, privacySalt, hashAlgorithm)
     }
 
     /**
@@ -105,8 +120,8 @@ data class ContractUpgradeWireTransaction(
     }
 
     /** Required for filtering transaction components. */
-    private val nonces = (0 until serializedComponents.size).map {
-        computeNonce(privacySalt, it, 0)
+    private val nonces = serializedComponents.indices.map {
+        computeNonce(hashAlgorithm, privacySalt, it, 0)
     }
 
     /** Resolves input states and contract attachments, and builds a ContractUpgradeLedgerTransaction. */

@@ -13,7 +13,7 @@ class StringToMethodCallParserTest {
         fun simple() = "simple"
         fun string(noteTextWord: String) = noteTextWord
         fun twoStrings(a: String, b: String) = a + b
-        fun simpleObject(hash: SecureHash.SHA256) = hash.toString()
+        fun simpleObject(hash: SecureHash) = hash.toString()
         fun complexObject(pair: Pair<Int, String>) = pair
         fun complexNestedObject(pairs: Pair<Int, Deque<Char>>) = pairs
 

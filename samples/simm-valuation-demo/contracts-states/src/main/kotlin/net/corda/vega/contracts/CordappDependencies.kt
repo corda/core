@@ -21,7 +21,7 @@ private fun loadDependencies(): List<SecureHash> {
     return URLClassLoader(arrayOf(cordappURL), null).use { cl ->
         val deps = cl.getResource("META-INF/Cordapp-Dependencies") ?: return emptyList()
         deps.openStream().bufferedReader().useLines { lines ->
-            lines.filterNot(String::isBlank).map(SecureHash.Companion::parse).toList()
+            lines.filterNot(String::isBlank).map(SecureHash.Companion::create).toList()
         }
     }
 }

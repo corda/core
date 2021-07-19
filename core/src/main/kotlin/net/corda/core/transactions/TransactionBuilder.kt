@@ -6,6 +6,7 @@ import net.corda.core.CordaInternal
 import net.corda.core.DeleteForDJVM
 import net.corda.core.contracts.*
 import net.corda.core.crypto.CompositeKey
+import net.corda.core.crypto.SecureHash.Companion.SHA2_256
 import net.corda.core.crypto.SignableData
 import net.corda.core.crypto.SignatureMetadata
 import net.corda.core.identity.Party
@@ -84,6 +85,11 @@ open class TransactionBuilder(
         )
     }
 
+    protected var hashAlgorithm = SHA2_256
+        set(value) {
+            field = value.toUpperCase()
+        }
+
     private val inputsWithTransactionState = arrayListOf<StateAndRef<ContractState>>()
     private val referencesWithTransactionState = arrayListOf<TransactionState<ContractState>>()
     private val excludedAttachments = arrayListOf<AttachmentId>()
@@ -103,6 +109,7 @@ open class TransactionBuilder(
                 references = ArrayList(references),
                 serviceHub = serviceHub
         )
+        t.hashAlgorithm = hashAlgorithm
         t.inputsWithTransactionState.addAll(this.inputsWithTransactionState)
         t.referencesWithTransactionState.addAll(this.referencesWithTransactionState)
         return t
@@ -175,7 +182,8 @@ open class TransactionBuilder(
                             window,
                             referenceStates,
                             services.networkParametersService.currentHash),
-                    privacySalt
+                    privacySalt,
+                    hashAlgorithm
             )
         }
 
@@ -814,6 +822,14 @@ open class TransactionBuilder(
 
     fun setPrivacySalt(privacySalt: PrivacySalt) = apply {
         this.privacySalt = privacySalt
+    }
+
+    fun setHashAlgorithm(hashAlgorithm: String) = apply {
+        this.hashAlgorithm = hashAlgorithm
+    }
+
+    fun resalt() = apply {
+        privacySalt = PrivacySalt.createFor(hashAlgorithm)
     }
 
     /** Returns an immutable list of input [StateRef]s. */

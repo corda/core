@@ -174,7 +174,7 @@ class Vault<out T : ContractState>(val states: Iterable<StateAndRef<T>>) {
             fun constraintInfo(type: Type, data: ByteArray?): ConstraintInfo {
                 return when (type) {
                     Type.ALWAYS_ACCEPT -> ConstraintInfo(AlwaysAcceptAttachmentConstraint)
-                    Type.HASH -> ConstraintInfo(HashAttachmentConstraint(SecureHash.parse(data!!.toHexString())))
+                    Type.HASH -> ConstraintInfo(HashAttachmentConstraint(SecureHash.create(data!!.toHexString())))
                     Type.CZ_WHITELISTED -> ConstraintInfo(WhitelistedByZoneAttachmentConstraint)
                     Type.SIGNATURE -> ConstraintInfo(SignatureAttachmentConstraint(Crypto.decodePublicKey(data!!)))
                 }

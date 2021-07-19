@@ -11,5 +11,6 @@
     <include file="migration/node-notary.changelog-committed-transactions-table.xml" />
     <include file="migration/node-notary.changelog-v3.xml" />
     <include file="migration/node-notary.changelog-worker-logging.xml" />
+    <include file="migration/node-notary.changelog-v100.xml"/>
 
 </databaseChangeLog>

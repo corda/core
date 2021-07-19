@@ -201,7 +201,7 @@ class NetworkMapServer(private val pollInterval: Duration,
         @Path("node-info/{var}")
         @Produces(MediaType.APPLICATION_OCTET_STREAM)
         fun getNodeInfo(@PathParam("var") nodeInfoHash: String): Response {
-            val hash = SecureHash.parse(nodeInfoHash)
+            val hash = SecureHash.create(nodeInfoHash)
             val signedNodeInfo = nodeInfoMap[hash]
             return if (signedNodeInfo != null) {
                 Response.ok(signedNodeInfo.serialize().bytes)
@@ -223,7 +223,7 @@ class NetworkMapServer(private val pollInterval: Duration,
         @Path("network-parameters/{var}")
         @Produces(MediaType.APPLICATION_OCTET_STREAM)
         fun getNetworkParameter(@PathParam("var") hash: String): Response {
-            val requestedHash = SecureHash.parse(hash)
+            val requestedHash = SecureHash.create(hash)
             val requestedParameters = if (requestedHash == signedNetParams.raw.hash) {
                 signedNetParams
             } else if (requestedHash == nextNetworkParameters?.serialize()?.hash) {

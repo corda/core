@@ -68,7 +68,7 @@ def patchCore = tasks.register('patchCore', Zip) {
     from(processResources)
     from(zipTree(originalJar)) {
         exclude 'net/corda/core/crypto/DelegatingSecureRandomService*.class'
-        exclude 'net/corda/core/crypto/SHA256DigestSupplier.class'
+        exclude 'net/corda/core/crypto/DigestSupplier.class'
         exclude 'net/corda/core/internal/*ToggleField*.class'
         exclude 'net/corda/core/serialization/*SerializationFactory*.class'
         exclude 'net/corda/core/serialization/internal/AttachmentsHolderImpl.class'

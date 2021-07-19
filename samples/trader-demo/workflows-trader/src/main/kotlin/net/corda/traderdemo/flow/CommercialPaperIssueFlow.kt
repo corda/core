@@ -29,7 +29,7 @@ class CommercialPaperIssueFlow(private val amount: Amount<Currency>,
     constructor(amount: Amount<Currency>, issueRef: OpaqueBytes, recipient: Party, notary: Party) : this(amount, issueRef, recipient, notary, tracker())
 
     companion object {
-        val PROSPECTUS_HASH = SecureHash.parse("decd098666b9657314870e192ced0c3519c2c9d395507a238338f8d003929de9")
+        val PROSPECTUS_HASH = SecureHash.create("decd098666b9657314870e192ced0c3519c2c9d395507a238338f8d003929de9")
 
         object ISSUING : ProgressTracker.Step("Issuing and timestamping some commercial paper")
 

@@ -265,7 +265,7 @@ class JacksonSupportTest(@Suppress("unused") private val name: String, factory: 
         println(mapper.writeValueAsString(json))
         val (wtxJson, signaturesJson) = json.assertHasOnlyFields("wire", "signatures")
         assertThat(signaturesJson.childrenAs<TransactionSignature>(mapper)).isEqualTo(stx.sigs)
-        val wtxFields = wtxJson.assertHasOnlyFields("id", "notary", "inputs", "attachments", "outputs", "commands", "timeWindow", "references", "privacySalt", "networkParametersHash")
+        val wtxFields = wtxJson.assertHasOnlyFields("id", "notary", "inputs", "attachments", "outputs", "commands", "timeWindow", "references", "privacySalt", "networkParametersHash", "hashAlgorithm")
         assertThat(wtxFields[0].valueAs<SecureHash>(mapper)).isEqualTo(wtx.id)
         assertThat(wtxFields[1].valueAs<Party>(mapper)).isEqualTo(wtx.notary)
         assertThat(wtxFields[2].childrenAs<StateRef>(mapper)).isEqualTo(wtx.inputs)
@@ -275,6 +275,7 @@ class JacksonSupportTest(@Suppress("unused") private val name: String, factory: 
         assertThat(wtxFields[6].valueAs<TimeWindow>(mapper)).isEqualTo(wtx.timeWindow)
         assertThat(wtxFields[7].childrenAs<StateRef>(mapper)).isEqualTo(wtx.references)
         assertThat(wtxFields[8].valueAs<PrivacySalt>(mapper)).isEqualTo(wtx.privacySalt)
+        assertThat(wtxFields[10].valueAs<String>(mapper)).isEqualTo(wtx.hashAlgorithm)
         assertThat(mapper.convertValue<WireTransaction>(wtxJson)).isEqualTo(wtx)
         assertThat(mapper.convertValue<SignedTransaction>(json)).isEqualTo(stx)
     }

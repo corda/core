@@ -128,7 +128,7 @@ abstract class AbstractCashSelection(private val maxRetries : Int = 8, private v
                 var totalPennies = 0L
                 val stateRefs = mutableSetOf<StateRef>()
                 while (rs.next()) {
-                    val txHash = SecureHash.parse(rs.getString(1))
+                    val txHash = SecureHash.create(rs.getString(1))
                     val index = rs.getInt(2)
                     val pennies = rs.getLong(3)
                     totalPennies = rs.getLong(4)

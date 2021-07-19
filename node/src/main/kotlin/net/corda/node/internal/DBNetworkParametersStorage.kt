@@ -45,7 +45,7 @@ class DBNetworkParametersStorage(
                     toPersistentEntityKey = { it.toString() },
                     fromPersistentEntity = {
                         Pair(
-                                SecureHash.parse(it.hash),
+                                SecureHash.create(it.hash),
                                 it.signedNetworkParameters
                         )
                     },
