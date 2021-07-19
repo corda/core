@@ -4,6 +4,7 @@ import net.corda.core.CordaInternal
 import net.corda.core.concurrent.CordaFuture
 import net.corda.core.context.InvocationContext
 import net.corda.core.contracts.ContractState
+import net.corda.core.contracts.StateAndRef
 import net.corda.core.crypto.SecureHash
 import net.corda.core.flows.FlowInitiator
 import net.corda.core.flows.FlowLogic
@@ -18,7 +19,12 @@ import net.corda.core.node.services.AttachmentId
 import net.corda.core.node.services.NetworkMapCache
 import net.corda.core.node.services.Vault
 import net.corda.core.node.services.VaultQueryException
-import net.corda.core.node.services.vault.*
+import net.corda.core.node.services.vault.AttachmentQueryCriteria
+import net.corda.core.node.services.vault.AttachmentSort
+import net.corda.core.node.services.vault.DEFAULT_PAGE_SIZE
+import net.corda.core.node.services.vault.PageSpecification
+import net.corda.core.node.services.vault.QueryCriteria
+import net.corda.core.node.services.vault.Sort
 import net.corda.core.serialization.CordaSerializable
 import net.corda.core.transactions.SignedTransaction
 import net.corda.core.utilities.Try
@@ -464,6 +470,27 @@ inline fun <reified T : ContractState> CordaRPCOps.vaultQueryBy(criteria: QueryC
                                                                 paging: PageSpecification = PageSpecification(),
                                                                 sorting: Sort = Sort(emptySet())): Vault.Page<T> {
     return vaultQueryBy(criteria, paging, sorting, T::class.java)
+}
+
+inline fun <reified T : ContractState> CordaRPCOps.vaultQueryBy(criteria: QueryCriteria, sorting: Sort, pageSize : Int = DEFAULT_PAGE_SIZE): Iterator<StateAndRef<T>> {
+    return net.corda.core.node.services.queryLazy(pageSize) {
+        pageSpec -> this.vaultQueryBy(criteria, pageSpec, sorting, T::class.java)
+    }
+}
+
+fun <T : ContractState> CordaRPCOps.vaultQueryBy(cls: Class<out T>, criteria: QueryCriteria, sorting: Sort, pageSize : Int): Iterator<StateAndRef<T>> {
+    return net.corda.core.node.services.queryLazyWrapper(pageSize) {
+        pageSpec -> this.vaultQueryBy(criteria, pageSpec, sorting, cls)
+    }
+}
+
+fun <T : ContractState> CordaRPCOps.vaultQueryBy(cls: Class<T>, criteria: QueryCriteria, sorting: Sort): Iterator<StateAndRef<T>> {
+    return vaultQueryBy(cls, criteria, sorting, DEFAULT_PAGE_SIZE)
+}
+
+@Suppress("unused")
+inline fun <reified T : ContractState> CordaRPCOps.vaultQueryBy(criteria: QueryCriteria, sorting: Sort): Iterator<StateAndRef<T>> {
+    return vaultQueryBy(criteria, sorting, DEFAULT_PAGE_SIZE)
 }
 
 inline fun <reified T : ContractState> CordaRPCOps.vaultTrackBy(criteria: QueryCriteria = QueryCriteria.VaultQueryCriteria(),

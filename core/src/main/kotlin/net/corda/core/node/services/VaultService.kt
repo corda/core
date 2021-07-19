@@ -12,6 +12,7 @@ import net.corda.core.flows.FlowLogic
 import net.corda.core.identity.AbstractParty
 import net.corda.core.internal.MAX_NUMBER_OF_KEYS_IN_SIGNATURE_CONSTRAINT
 import net.corda.core.internal.concurrent.doneFuture
+import net.corda.core.messaging.CordaRPCOps
 import net.corda.core.messaging.DataFeed
 import net.corda.core.node.services.Vault.RelevancyStatus.*
 import net.corda.core.node.services.Vault.StateStatus
@@ -475,6 +476,52 @@ interface VaultService {
     fun <T : ContractState> trackBy(contractStateType: Class<out T>, criteria: QueryCriteria, paging: PageSpecification, sorting: Sort): DataFeed<Vault.Page<T>, Vault.Update<T>> {
         return _trackBy(criteria, paging, sorting, contractStateType)
     }
+}
+
+inline fun <reified T : ContractState> queryLazy(
+        pageSize : Int,
+        crossinline queryFunction: (PageSpecification) -> Vault.Page<T>): Iterator<StateAndRef<T>> {
+    return object : Iterator<StateAndRef<T>> {
+        var index = 0
+        var page: Vault.Page<T> = loadPage()
+
+        override fun hasNext(): Boolean {
+            return index < page.totalStatesAvailable
+        }
+
+        override fun next(): StateAndRef<T> {
+            val result = page.states[index++ % pageSize]
+            if (index % pageSize == 0 && index < page.totalStatesAvailable) {
+                page = loadPage()
+            }
+            return result
+        }
+
+        private fun loadPage() : Vault.Page<T> {
+            return queryFunction(PageSpecification(pageNumber = (index / pageSize) + 1, pageSize = pageSize))
+        }
+    }
+}
+
+internal fun <T : ContractState> queryLazyWrapper(
+        pageSize : Int,
+        queryFunction: (PageSpecification) -> Vault.Page<T>): Iterator<StateAndRef<T>> {
+    return queryLazy<ContractState>(pageSize, queryFunction) as Iterator<StateAndRef<T>>
+}
+
+@Suppress("unused")
+inline fun <reified T : ContractState> VaultService.queryLazy(criteria: QueryCriteria, sorting : Sort, pageSize : Int = DEFAULT_PAGE_SIZE): Iterator<StateAndRef<T>> {
+    return queryLazy (pageSize) { pageSpec -> this.queryBy<T>(criteria, pageSpec, sorting) }
+}
+
+@Suppress("unused")
+fun <T : ContractState> VaultService.queryLazy(cls : Class<out T>, criteria: QueryCriteria, sorting : Sort, pageSize : Int): Iterator<StateAndRef<T>> {
+    return queryLazyWrapper (pageSize) { pageSpec -> this.queryBy(cls, criteria, pageSpec, sorting) }
+}
+
+@Suppress("unused")
+fun <T : ContractState> VaultService.queryLazy(cls : Class<out T>, criteria: QueryCriteria, sorting : Sort): Iterator<StateAndRef<T>> {
+    return queryLazy(cls, criteria, sorting, DEFAULT_PAGE_SIZE)
 }
 
 inline fun <reified T : ContractState> VaultService.queryBy(): Vault.Page<T> {
