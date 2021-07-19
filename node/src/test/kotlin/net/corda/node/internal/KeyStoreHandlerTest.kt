@@ -30,6 +30,7 @@ import net.corda.testing.core.BOB_NAME
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.Before
+import org.junit.Ignore
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -63,11 +64,13 @@ class KeyStoreHandlerTest {
             doReturn(p2pSslOptions).whenever(it).p2pSslOptions
             doReturn(ALICE_NAME).whenever(it).myLegalName
             doReturn(null).whenever(it).notary
+            doReturn(certificateDir).whenever(it).certificatesDirectory
         }
         cryptoService = BCCryptoService(ALICE_NAME.x500Principal, signingCertificateStore)
         keyStoreHandler = KeyStoreHandler(config, cryptoService)
     }
 
+    @Ignore("Keystore is created on-demand with membership groups as a temporary solution")
     @Test(timeout = 300_000)
     fun `missing node keystore`() {
         val signingCertificateStore = CertificateStoreStubs.Signing.withCertificatesDirectory(certificateDir,
@@ -79,6 +82,7 @@ class KeyStoreHandlerTest {
         }.hasMessageContaining("One or more keyStores (identity or TLS) or trustStore not found.")
     }
 
+    @Ignore("Keystore is created on-demand with membership groups as a temporary solution")
     @Test(timeout = 300_000)
     fun `missing truststore`() {
         val p2pSslOptions = CertificateStoreStubs.P2P.withCertificatesDirectory(certificateDir, trustStoreFileName = "invalid.jks")
@@ -89,6 +93,7 @@ class KeyStoreHandlerTest {
         }.hasMessageContaining("One or more keyStores (identity or TLS) or trustStore not found.")
     }
 
+    @Ignore("Keystore is created on-demand with membership groups as a temporary solution")
     @Test(timeout = 300_000)
     fun `missing TLS keystore`() {
         val p2pSslOptions = CertificateStoreStubs.P2P.withCertificatesDirectory(certificateDir, keyStoreFileName = "invalid.jks")

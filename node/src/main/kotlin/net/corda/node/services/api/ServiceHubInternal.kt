@@ -21,7 +21,6 @@ import net.corda.node.internal.cordapp.CordappProviderInternal
 import net.corda.node.services.DbTransactionsResolver
 import net.corda.node.services.config.NodeConfiguration
 import net.corda.node.services.messaging.MessagingService
-import net.corda.node.services.network.NetworkMapUpdater
 import net.corda.node.services.persistence.AttachmentStorageInternal
 import net.corda.node.services.statemachine.ExternalEvent
 import net.corda.node.services.statemachine.FlowStateMachineImpl
@@ -142,14 +141,13 @@ interface ServiceHubInternal : ServiceHubCoreInternal {
     val stateMachineRecordedTransactionMapping: StateMachineRecordedTransactionMappingStorage
     val monitoringService: MonitoringService
     val schemaService: SchemaService
-    override val networkMapCache: NetworkMapCacheInternal
+    override val networkMapCache: MembershipGroupCacheInternal
     val auditService: AuditService
     val rpcFlows: List<Class<out FlowLogic<*>>>
     val networkService: MessagingService
     val database: CordaPersistence
     val configuration: NodeConfiguration
     val nodeProperties: NodePropertiesStore
-    val networkMapUpdater: NetworkMapUpdater
     override val cordappProvider: CordappProviderInternal
 
     fun getFlowFactory(initiatingFlowClass: Class<out FlowLogic<*>>): InitiatedFlowFactory<*>?

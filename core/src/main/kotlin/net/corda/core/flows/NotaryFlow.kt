@@ -14,6 +14,7 @@ import net.corda.core.internal.NetworkParametersStorage
 import net.corda.core.internal.notary.generateSignature
 import net.corda.core.internal.notary.validateSignatures
 import net.corda.core.internal.pushToLoggingContext
+import net.corda.core.node.distributed
 import net.corda.core.transactions.*
 import net.corda.core.utilities.ProgressTracker
 import net.corda.core.utilities.UntrustworthyData
@@ -60,7 +61,7 @@ class NotaryFlow {
             @CordaInternal
             get() {
                 val notaryParty = stx.notary ?: throw IllegalStateException("Transaction does not specify a Notary")
-                return serviceHub.networkMapCache.getNodesByLegalIdentityKey(notaryParty.owningKey).size > 1
+                return serviceHub.networkMapCache.getMemberByParty(notaryParty)?.distributed ?: false
             }
 
         @Suspendable

@@ -11,7 +11,7 @@ import net.corda.core.serialization.SerializationContext
 import net.corda.core.serialization.internal.*
 import net.corda.core.utilities.contextLogger
 import net.corda.node.internal.DBNetworkParametersStorage
-import net.corda.node.internal.schemas.NodeInfoSchemaV1
+import net.corda.node.internal.schemas.MemberInfoSchemaV1
 import net.corda.node.services.identity.PersistentIdentityService
 import net.corda.node.services.keys.BasicHSMKeyManagementService
 import net.corda.node.services.persistence.DBTransactionStorage
@@ -77,7 +77,7 @@ class VaultStateMigration : CordaMigration() {
             logger.error("Cannot migrate vault states: Liquibase failed to provide a suitable database connection")
             throw VaultStateMigrationException("Cannot migrate vault states as liquibase failed to provide a suitable database connection")
         }
-        initialiseNodeServices(database, setOf(VaultMigrationSchemaV1, VaultSchemaV1, NodeInfoSchemaV1))
+        initialiseNodeServices(database, setOf(VaultMigrationSchemaV1, VaultSchemaV1, MemberInfoSchemaV1))
         var statesSkipped = 0
         val persistentStates = VaultStateIterator(cordaDB)
         if (persistentStates.numStates > 0) {

@@ -264,7 +264,7 @@ class ReferencedStatesFlowTests {
     class Initiator(private val stateAndRef: StateAndRef<ContractState>) : FlowLogic<Unit>() {
         @Suspendable
         override fun call() {
-            val sessions = serviceHub.networkMapCache.allNodes.flatMap { it.legalIdentities }.map { initiateFlow(it) }
+            val sessions = serviceHub.networkMapCache.allParties.map { initiateFlow(it) }
             val transactionId = stateAndRef.ref.txhash
             val transaction = serviceHub.validatedTransactions.getTransaction(transactionId)
                     ?: throw FlowException("Cannot find $transactionId.")

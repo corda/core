@@ -23,6 +23,8 @@ import net.corda.testing.core.SerializationEnvironmentRule
 import net.corda.testing.internal.configureDatabase
 import net.corda.coretesting.internal.createNodeInfoAndSigned
 import net.corda.coretesting.internal.rigorousMock
+import net.corda.node.internal.schemas.MemberInfoSchemaV1
+import net.corda.node.services.network.toMemberInfo
 import net.corda.testing.node.MockServices.Companion.makeTestDataSourceProperties
 import org.apache.commons.lang3.SystemUtils
 import org.assertj.core.api.Assertions.assertThat
@@ -87,18 +89,8 @@ class NodeTest {
         val (nodeInfo, _) = createNodeInfoAndSigned(ALICE_NAME)
         configureDatabase(configuration.dataSourceProperties, configuration.database, { null }, { null }).use {
             it.transaction {
-                val persistentNodeInfo = NodeInfoSchemaV1.PersistentNodeInfo(
-                        id = 0,
-                        hash = nodeInfo.serialize().hash.toString(),
-                        addresses = nodeInfo.addresses.map { NodeInfoSchemaV1.DBHostAndPort.fromHostAndPort(it) },
-                        legalIdentitiesAndCerts = nodeInfo.legalIdentitiesAndCerts.mapIndexed { idx, elem ->
-                            NodeInfoSchemaV1.DBPartyAndCertificate(elem, isMain = idx == 0)
-                        },
-                        platformVersion = nodeInfo.platformVersion,
-                        serial = nodeInfo.serial
-                )
-                // Save some NodeInfo
-                session.save(persistentNodeInfo)
+                val persistentMemberInfo = MemberInfoSchemaV1.PersistentMemberInfo.fromMemberInfo(nodeInfo.toMemberInfo())
+                session.save(persistentMemberInfo)
             }
             val versionInfo = VersionInfo(10, "3.0", "SNAPSHOT", "R3")
             val node = Node(configuration, versionInfo, initialiseSerialization = false)
@@ -172,10 +164,10 @@ class NodeTest {
         assertFailsWith<NumberFormatException> { getJavaUpdateVersion("1.8.0-adoptopenjdk") }
     }
 
-    private fun getAllInfos(database: CordaPersistence): List<NodeInfoSchemaV1.PersistentNodeInfo> {
+    private fun getAllInfos(database: CordaPersistence): List<MemberInfoSchemaV1.PersistentMemberInfo> {
         return database.transaction {
-            val criteria = session.criteriaBuilder.createQuery(NodeInfoSchemaV1.PersistentNodeInfo::class.java)
-            criteria.select(criteria.from(NodeInfoSchemaV1.PersistentNodeInfo::class.java))
+            val criteria = session.criteriaBuilder.createQuery(MemberInfoSchemaV1.PersistentMemberInfo::class.java)
+            criteria.select(criteria.from(MemberInfoSchemaV1.PersistentMemberInfo::class.java))
             session.createQuery(criteria).resultList
         }
     }

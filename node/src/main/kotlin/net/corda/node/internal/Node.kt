@@ -477,17 +477,8 @@ open class Node(configuration: NodeConfiguration,
                     "To disable autodetect set detectPublicIp = false in the node.conf, or consider using messagingServerAddress and messagingServerExternal")
             val foundPublicIP = AddressUtils.tryDetectPublicIP()
             if (foundPublicIP == null) {
-                try {
-                    val retrievedHostName = networkMapClient?.myPublicHostname()
-                    if (retrievedHostName != null) {
-                        log.info("Retrieved public IP from Network Map Service: $this. This will be used instead of the provided \"$host\" as the advertised address.")
-                    }
-                    retrievedHostName
-                } catch (ignore: Exception) {
-                    // Cannot reach the network map service, ignore the exception and use provided P2P address instead.
-                    log.warn("Cannot connect to the network map service for public IP detection.")
-                    null
-                }
+                log.warn("Cannot detect public IP.")
+                null
             } else {
                 log.info("Detected public IP: ${foundPublicIP.hostAddress}. This will be used instead of the provided \"$host\" as the advertised address.")
                 foundPublicIP.hostAddress

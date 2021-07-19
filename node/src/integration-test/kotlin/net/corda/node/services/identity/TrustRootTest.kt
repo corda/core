@@ -34,6 +34,7 @@ import net.corda.testing.node.internal.InternalMockNodeParameters
 import net.corda.testing.node.internal.TestStartedNode
 import net.corda.testing.node.internal.startFlow
 import org.junit.After
+import org.junit.Ignore
 import org.junit.Test
 import javax.security.auth.x500.X500Principal
 import kotlin.test.assertEquals
@@ -84,6 +85,7 @@ class TrustRootTest {
         assertEquals(1000.DOLLARS, bob.services.getCashBalance(USD))
     }
 
+    @Ignore("Trust root is not relevant to holding identities")
     @Test(timeout = 300_000)
     fun `fail to start flow when missing acceptor's root on the initiator side`() {
         mockNet = InternalMockNetwork(cordappsForAllNodes = FINANCE_CORDAPPS, notarySpecs = listOf())
@@ -116,6 +118,7 @@ class TrustRootTest {
         assertEquals(0.DOLLARS, bob.services.getCashBalance(USD))
     }
 
+    @Ignore("Trust root is not relevant to holding identities")
     @Test(timeout = 300_000)
     fun `fail to notarise when missing initiator's root on the notary side`() {
         mockNet = InternalMockNetwork(cordappsForAllNodes = FINANCE_CORDAPPS, notarySpecs = listOf())

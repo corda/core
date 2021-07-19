@@ -5,8 +5,9 @@ import com.esotericsoftware.kryo.KryoException
 import net.corda.core.context.InvocationOrigin
 import net.corda.core.flows.Destination
 import net.corda.core.flows.FlowException
-import net.corda.core.identity.AbstractParty
+import net.corda.core.identity.AnonymousParty
 import net.corda.core.identity.Party
+import net.corda.core.node.services.PartyInfo
 import net.corda.core.serialization.SerializedBytes
 import net.corda.core.serialization.serialize
 import net.corda.core.utilities.contextLogger
@@ -15,6 +16,8 @@ import net.corda.node.services.api.ServiceHubInternal
 import net.corda.node.services.messaging.DeduplicationHandler
 import net.corda.node.services.messaging.MessagingService
 import net.corda.node.services.messaging.ReceivedMessage
+import net.corda.node.services.network.mgm
+import net.corda.node.services.network.toPartyInfo
 import net.corda.nodeapi.internal.ArtemisMessagingComponent.Companion.P2PMessagingHeaders
 import java.io.NotSerializableException
 
@@ -68,18 +71,19 @@ class FlowMessagingImpl(val serviceHub: ServiceHubInternal): FlowMessaging {
     }
 
     private fun createMessage(destination: Destination, message: SessionMessage, deduplicationId: SenderDeduplicationId): MessagingService.AddressedMessage {
-        // We assume that the destination type has already been checked by initiateFlow.
-        // Destination may point to a stale well-known identity due to key rotation, so always resolve actual identity via IdentityService.
-        val party = requireNotNull(serviceHub.identityService.wellKnownPartyFromAnonymous(destination as AbstractParty)) {
-            "We do not know who $destination belongs to"
-        }
-        if (destination == party) {
-            log.trace { "Sending message $deduplicationId $message to $party" }
+        val party = if (destination is Party) {
+            log.trace { "Sending message $deduplicationId $message to $destination" }
+            destination
         } else {
-            log.trace { "Sending message $deduplicationId $message to $party on behalf of $destination" }
+            // We assume that the destination type has already been checked by initiateFlow
+            val wellKnown = requireNotNull(serviceHub.identityService.wellKnownPartyFromAnonymous(destination as AnonymousParty)) {
+                "We do not know who $destination belongs to"
+            }
+            log.trace { "Sending message $deduplicationId $message to $wellKnown on behalf of $destination" }
+            wellKnown
         }
         val networkMessage = serviceHub.networkService.createMessage(sessionTopic, serializeSessionMessage(message).bytes, deduplicationId, message.additionalHeaders(party))
-        val partyInfo = requireNotNull(serviceHub.networkMapCache.getPartyInfo(party)) { "Don't know about ${party.description()}" }
+        val partyInfo = requireNotNull(getPartyInfo(party)) { "Don't know about ${party.description()}" }
         val address = serviceHub.networkService.getAddressOfParty(partyInfo)
         val sequenceKey = when (message) {
             is InitialSessionMessage -> message.initiatorSessionId
@@ -112,5 +116,17 @@ class FlowMessagingImpl(val serviceHub: ServiceHubInternal): FlowMessaging {
                 throw exception
             }
         }
+    }
+
+    private fun getPartyInfo(party: Party): PartyInfo? {
+        val memberInfo = serviceHub.networkMapCache.getMemberByParty(party)
+        if (memberInfo != null) {
+            return memberInfo.toPartyInfo()
+        }
+        // Allow MGM flows to bypass MembershipGroupCache authorization for registration requests.
+        if (serviceHub.mgm) {
+            return PartyInfo.SingleNode(party, listOf())
+        }
+        return null
     }
 }

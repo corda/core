@@ -27,6 +27,7 @@ import kotlin.collections.LinkedHashSet
  * @param identities initial set of identities for the service, typically only used for unit tests.
  */
 @ThreadSafe
+@Suppress("TooManyFunctions")
 class InMemoryIdentityService(
         identities: List<PartyAndCertificate> = emptyList(),
         override val trustRoot: X509Certificate
@@ -88,6 +89,10 @@ class InMemoryIdentityService(
             verifyAndRegisterIdentity(trustAnchors, PartyAndCertificate(firstPath))
         }
         return registerIdentity(identity, false)
+    }
+
+    override fun registerIdentity(identity: PartyAndCertificate) {
+        registerIdentity(identity, false)
     }
 
     private fun registerIdentity(identity: PartyAndCertificate, isNewRandomIdentity: Boolean): PartyAndCertificate? {

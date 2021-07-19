@@ -26,9 +26,10 @@ import net.corda.finance.contracts.asset.Obligation
 import net.corda.finance.contracts.asset.OnLedgerAsset
 import net.corda.finance.schemas.CashSchemaV1
 import net.corda.node.internal.DBNetworkParametersStorage
-import net.corda.node.internal.schemas.NodeInfoSchemaV1
+import net.corda.node.internal.schemas.MemberInfoSchemaV1
 import net.corda.node.services.identity.PersistentIdentityService
 import net.corda.node.services.keys.BasicHSMKeyManagementService
+import net.corda.node.services.network.memberInfo
 import net.corda.node.services.persistence.DBTransactionStorage
 import net.corda.node.services.vault.VaultSchemaV1
 import net.corda.nodeapi.internal.crypto.X509Utilities
@@ -198,9 +199,8 @@ class VaultStateMigrationTest {
             identities.groupBy { it.name }.forEach { (_, certs) ->
                 val persistentIDs = certs.map { PersistentIdentityService.PersistentPublicKeyHashToCertificate(it.owningKey.toStringShort(), it.certPath.encoded) }
                 persistentIDs.forEach { session.save(it) }
-                val networkIdentity = NodeInfoSchemaV1.DBPartyAndCertificate(certs.first(), true)
-                val persistentNodeInfo = NodeInfoSchemaV1.PersistentNodeInfo(0, "", listOf(), listOf(networkIdentity), 0, 0)
-                session.save(persistentNodeInfo)
+                val persistentMemberInfo = MemberInfoSchemaV1.PersistentMemberInfo.fromMemberInfo(memberInfo(certs.first().party))
+                session.save(persistentMemberInfo)
             }
         }
     }

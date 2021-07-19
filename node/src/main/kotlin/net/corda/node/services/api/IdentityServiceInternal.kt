@@ -14,5 +14,7 @@ interface IdentityServiceInternal : IdentityService {
     @Throws(CertificateExpiredException::class, CertificateNotYetValidException::class, InvalidAlgorithmParameterException::class)
     fun verifyAndRegisterNewRandomIdentity(identity: PartyAndCertificate)
 
+    fun registerIdentity(identity: PartyAndCertificate)
+
     fun invalidateCaches(name: CordaX500Name) {}
 }

@@ -11,7 +11,6 @@ import net.corda.node.services.config.NodeConfiguration
 import net.corda.node.services.config.NodeH2Settings
 import net.corda.node.services.events.NodeSchedulerService
 import net.corda.node.services.messaging.MessagingService
-import net.corda.node.services.network.NetworkMapUpdater
 import net.corda.node.services.statemachine.StateMachineManager
 import net.corda.nodeapi.internal.cryptoservice.CryptoService
 import net.corda.nodeapi.internal.persistence.CouldNotCreateDataSourceException
@@ -151,7 +150,7 @@ class NodeH2SecurityTests {
 
         override fun makeCryptoService(): CryptoService = mock()
 
-        override fun makeNetworkMapUpdater(): NetworkMapUpdater = mock()
+        override fun makeMembershipGroupUpdater(): LifecycleSupport = mock()
 
         override fun makeNodeSchedulerService(): NodeSchedulerService = mock()
 

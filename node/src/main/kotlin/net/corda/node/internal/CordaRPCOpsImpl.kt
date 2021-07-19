@@ -2,7 +2,6 @@ package net.corda.node.internal
 
 import net.corda.client.rpc.notUsed
 import net.corda.common.logging.CordaVersion
-import net.corda.core.CordaRuntimeException
 import net.corda.core.concurrent.CordaFuture
 import net.corda.core.context.InvocationContext
 import net.corda.core.context.InvocationOrigin
@@ -20,7 +19,6 @@ import net.corda.core.identity.Party
 import net.corda.core.internal.FlowStateMachineHandle
 import net.corda.core.internal.RPC_UPLOADER
 import net.corda.core.internal.STRUCTURAL_STEP_PREFIX
-import net.corda.core.internal.sign
 import net.corda.core.messaging.CordaRPCOps
 import net.corda.core.messaging.DataFeed
 import net.corda.core.messaging.FlowHandle
@@ -46,12 +44,13 @@ import net.corda.core.node.services.vault.AttachmentSort
 import net.corda.core.node.services.vault.PageSpecification
 import net.corda.core.node.services.vault.QueryCriteria
 import net.corda.core.node.services.vault.Sort
-import net.corda.core.serialization.serialize
 import net.corda.core.transactions.SignedTransaction
 import net.corda.core.utilities.getOrThrow
 import net.corda.core.utilities.loggerFor
 import net.corda.node.services.api.FlowStarter
 import net.corda.node.services.api.ServiceHubInternal
+import net.corda.node.services.network.toMapChange
+import net.corda.node.services.network.toNodeInfo
 import net.corda.node.services.rpc.context
 import net.corda.node.services.statemachine.StateMachineManager
 import net.corda.nodeapi.exceptions.MissingAttachmentException
@@ -60,7 +59,6 @@ import net.corda.nodeapi.exceptions.RejectedCommandException
 import rx.Observable
 import rx.Subscription
 import java.io.InputStream
-import java.net.ConnectException
 import java.security.PublicKey
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicReference
@@ -99,26 +97,18 @@ internal class CordaRPCOpsImpl(
     override val protocolVersion: Int get() = nodeInfo().platformVersion
 
     override fun networkMapSnapshot(): List<NodeInfo> {
-        val (snapshot, updates) = networkMapFeed()
-        updates.notUsed()
-        return snapshot
+        return services.networkMapCache.allMembers.map { it.toNodeInfo() }.toList()
     }
 
     override val networkParameters: NetworkParameters get() = services.networkParameters
 
-    override fun networkParametersFeed(): DataFeed<ParametersUpdateInfo?, ParametersUpdateInfo> {
-        return services.networkMapUpdater.trackParametersUpdate()
-    }
+    override fun networkParametersFeed(): DataFeed<ParametersUpdateInfo?, ParametersUpdateInfo> = throw NotImplementedError()
 
-    override fun acceptNewNetworkParameters(parametersHash: SecureHash) {
-        // TODO When multiple identities design will be better specified this should be signature from node operator.
-        services.networkMapUpdater.acceptNewNetworkParameters(parametersHash) { hash ->
-            hash.serialize().sign { services.keyManagementService.sign(it.bytes, services.myInfo.legalIdentities[0].owningKey) }
-        }
-    }
+    override fun acceptNewNetworkParameters(parametersHash: SecureHash) = throw NotImplementedError()
 
     override fun networkMapFeed(): DataFeed<List<NodeInfo>, NetworkMapCache.MapChange> {
-        return services.networkMapCache.track()
+        val dataFeed = services.networkMapCache.track()
+        return DataFeed(dataFeed.snapshot.map { it.toNodeInfo() }, dataFeed.updates.map { it.toMapChange() })
     }
 
     override fun <T : ContractState> vaultQueryBy(criteria: QueryCriteria,
@@ -314,33 +304,25 @@ internal class CordaRPCOpsImpl(
         return services.identityService.wellKnownPartyFromX500Name(x500Name)
     }
 
-    override fun notaryPartyFromX500Name(x500Name: CordaX500Name): Party? = services.networkMapCache.getNotary(x500Name)
+    // TODO[DR]: Remove from API
+    override fun notaryPartyFromX500Name(x500Name: CordaX500Name): Party? = throw NotImplementedError()
 
     override fun partiesFromName(query: String, exactMatch: Boolean): Set<Party> {
         return services.identityService.partiesFromName(query, exactMatch)
     }
 
+    // TODO[DR]: Use Party instead of AbstractParty and getPartyByKey()
     override fun nodeInfoFromParty(party: AbstractParty): NodeInfo? {
-        return services.networkMapCache.getNodeByLegalIdentity(party)
+        return services.networkMapCache.getMemberByKey(party.owningKey)?.toNodeInfo()
     }
 
     override fun registeredFlows(): List<String> = services.rpcFlows.asSequence().map(Class<*>::getName).sorted().toList()
 
     override fun clearNetworkMapCache() {
-        services.networkMapCache.clearNetworkMapCache()
+        services.networkMapCache.clearCache()
     }
 
-    override fun refreshNetworkMapCache() {
-        try {
-            services.networkMapUpdater.updateNetworkMapCache()
-        } catch (e: Exception) {
-            when (e) {
-                is ConnectException -> throw CordaRuntimeException("There is connection problem to network map. The possible causes " +
-                        "are incorrect configuration or network map service being down")
-                else -> throw e
-            }
-        }
-    }
+    override fun refreshNetworkMapCache() = throw NotImplementedError()
 
     override fun <T : ContractState> vaultQuery(contractStateType: Class<out T>): Vault.Page<T> {
         return vaultQueryBy(QueryCriteria.VaultQueryCriteria(), PageSpecification(), Sort(emptySet()), contractStateType)

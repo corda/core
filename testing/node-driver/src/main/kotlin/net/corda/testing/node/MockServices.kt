@@ -43,7 +43,7 @@ import net.corda.nodeapi.internal.persistence.contextTransaction
 import net.corda.testing.common.internal.testNetworkParameters
 import net.corda.testing.core.TestIdentity
 import net.corda.coretesting.internal.DEV_ROOT_CA
-import net.corda.node.services.network.PersistentNetworkMapCache
+import net.corda.node.services.network.PersistentMembershipGroupCache
 import net.corda.testing.internal.MockCordappProvider
 import net.corda.testing.internal.TestingNamedCacheFactory
 import net.corda.testing.internal.configureDatabase
@@ -192,7 +192,7 @@ open class MockServices private constructor(
                 start(setOf(DEV_ROOT_CA.certificate), initialIdentity.identity, pkToIdCache = pkToIdCache)
                 persistence.transaction { identityService.loadIdentities(moreIdentities + initialIdentity.identity) }
             }
-            val networkMapCache = PersistentNetworkMapCache(cacheFactory, persistence, identityService)
+            val networkMapCache = PersistentMembershipGroupCache(cacheFactory, persistence, identityService)
             (moreIdentities + initialIdentity.identity).forEach {
                 networkMapCache.addOrUpdateNode(NodeInfo(listOf(NetworkHostAndPort("localhost", 0)), listOf(it), PLATFORM_VERSION, 0))
             }
@@ -433,12 +433,13 @@ open class MockServices private constructor(
     final override val attachments = MockAttachmentStorage()
     override val vaultService: VaultService get() = throw UnsupportedOperationException()
     override val contractUpgradeService: ContractUpgradeService get() = throw UnsupportedOperationException()
-    override val networkMapCache: NetworkMapCache get() = throw UnsupportedOperationException()
+    override val networkMapCache: MembershipGroupCache get() = throw UnsupportedOperationException()
     override val clock: TestClock get() = TestClock(Clock.systemUTC())
     override val myInfo: NodeInfo
         get() {
             return NodeInfo(listOf(NetworkHostAndPort("mock.node.services", 10000)), listOf(initialIdentity.identity), 1, serial = 1L)
         }
+    override val myMemberInfo: MemberInfo get() = throw UnsupportedOperationException()
     private val mockCordappProvider: MockCordappProvider = MockCordappProvider(cordappLoader, attachments).also {
         it.start()
     }

@@ -120,7 +120,7 @@ class FlowFrameworkPersistenceTests {
         bobNode.dispose()
         bobNode.database.transaction {
             assertEquals(1, bobNode.internals.checkpointStorage.checkpoints().size) // confirm checkpoint
-            bobNode.services.networkMapCache.clearNetworkMapCache()
+            bobNode.services.networkMapCache.clearCache()
         }
         val node2b = mockNet.createNode(InternalMockNodeParameters(bobNode.internals.id))
         bobNode.internals.manuallyCloseDB()

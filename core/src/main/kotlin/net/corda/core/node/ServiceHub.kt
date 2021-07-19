@@ -156,7 +156,7 @@ interface ServiceHub : ServicesForResolution {
      * from an authoritative service, and adds easy lookup of the data stored within it. Generally it would be initialised
      * with a specified network map service, which it fetches data from and then subscribes to updates of.
      */
-    val networkMapCache: NetworkMapCache
+    val networkMapCache: MembershipGroupCache
 
     /**
      * The [DiagnosticsService] provides diagnostic level information about the node, including the current version of the node, and the
@@ -179,6 +179,9 @@ interface ServiceHub : ServicesForResolution {
 
     /** The [NodeInfo] object corresponding to our own entry in the network map. */
     val myInfo: NodeInfo
+
+    /** The [MemberInfo] object which corresponds to our entry in the Membership Group. **/
+    val myMemberInfo: MemberInfo
 
     /**
      * Return the singleton instance of the given Corda service type. This is a class that is annotated with

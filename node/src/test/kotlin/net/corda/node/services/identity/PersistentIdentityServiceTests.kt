@@ -6,13 +6,13 @@ import net.corda.core.identity.AnonymousParty
 import net.corda.core.identity.CordaX500Name
 import net.corda.core.identity.Party
 import net.corda.core.identity.PartyAndCertificate
-import net.corda.core.node.NodeInfo
+import net.corda.core.node.MemberInfo
 import net.corda.core.node.services.UnknownAnonymousPartyException
 import net.corda.core.serialization.serialize
-import net.corda.core.utilities.NetworkHostAndPort
 import net.corda.coretesting.internal.DEV_INTERMEDIATE_CA
 import net.corda.coretesting.internal.DEV_ROOT_CA
-import net.corda.node.services.network.PersistentNetworkMapCache
+import net.corda.node.services.network.PersistentMembershipGroupCache
+import net.corda.node.services.network.memberInfo
 import net.corda.node.services.persistence.PublicKeyToOwningIdentityCacheImpl
 import net.corda.nodeapi.internal.createDevNodeIdentity
 import net.corda.nodeapi.internal.crypto.CertificateType
@@ -63,7 +63,7 @@ class PersistentIdentityServiceTests {
     private val cacheFactory = TestingNamedCacheFactory()
     private lateinit var database: CordaPersistence
     private lateinit var identityService: PersistentIdentityService
-    private lateinit var networkMapCache: PersistentNetworkMapCache
+    private lateinit var networkMapCache: PersistentMembershipGroupCache
 
     @Before
     fun setup() {
@@ -82,7 +82,7 @@ class PersistentIdentityServiceTests {
                 listOf(notary.party),
                 PublicKeyToOwningIdentityCacheImpl(database, cacheFactory)
         )
-        networkMapCache = PersistentNetworkMapCache(cacheFactory, database, identityService)
+        networkMapCache = PersistentMembershipGroupCache(cacheFactory, database, identityService)
     }
 
     @After
@@ -308,8 +308,10 @@ class PersistentIdentityServiceTests {
         return Pair(issuer, PartyAndCertificate(txCertPath))
     }
 
-    private fun PersistentNetworkMapCache.verifyAndRegisterIdentity(identity: PartyAndCertificate) {
-        addOrUpdateNode(NodeInfo(listOf(NetworkHostAndPort("localhost", 12345)), listOf(identity), 1, 0))
+    private fun PersistentMembershipGroupCache.verifyAndRegisterIdentity(identity: PartyAndCertificate): MemberInfo {
+        val memberInfo = memberInfo(identity.party)
+        addOrUpdateMember(memberInfo)
+        return memberInfo
     }
 
     /**
@@ -336,7 +338,7 @@ class PersistentIdentityServiceTests {
 
     @Test(timeout = 300_000)
     fun `rotate identity`() {
-        networkMapCache.verifyAndRegisterIdentity(ALICE_IDENTITY)
+        val memberInfo = networkMapCache.verifyAndRegisterIdentity(ALICE_IDENTITY)
         val anonymousParty = AnonymousParty(generateKeyPair().public)
         identityService.registerKeyToParty(anonymousParty.owningKey)
         assertEquals(ALICE, identityService.partyFromKey(anonymousParty.owningKey))
@@ -353,7 +355,8 @@ class PersistentIdentityServiceTests {
         assertEquals(ALICE, identityService.wellKnownPartyFromX500Name(ALICE.name))
 
         val alice2 = getTestPartyAndCertificate(ALICE.name, generateKeyPair().public)
-        networkMapCache.verifyAndRegisterIdentity(alice2)
+        val memberInfo2 = memberInfo.copy(party = alice2.party, keys = listOf(ALICE.owningKey, alice2.owningKey))
+        networkMapCache.addOrUpdateMember(memberInfo2)
         assertEquals(alice2.party, identityService.wellKnownPartyFromAnonymous(anonymousParty))
         assertEquals(alice2.party, identityService.wellKnownPartyFromAnonymous(ALICE))
         assertEquals(alice2.party, identityService.wellKnownPartyFromX500Name(ALICE.name))

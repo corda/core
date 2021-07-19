@@ -194,6 +194,7 @@ fun registerCustomSerializers(factory: SerializerFactory) {
         register(net.corda.serialization.internal.amqp.custom.BitSetSerializer(this))
         register(net.corda.serialization.internal.amqp.custom.EnumSetSerializer(this))
         register(net.corda.serialization.internal.amqp.custom.ContractAttachmentSerializer(this))
+        register(net.corda.serialization.internal.amqp.custom.X500PrincipalSerializer(this))
     }
     registerNonDeterministicSerializers(factory)
 }

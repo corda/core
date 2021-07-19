@@ -10,8 +10,9 @@ import net.corda.core.internal.ThreadBox
 import net.corda.core.messaging.CordaRPCOps
 import net.corda.core.messaging.MessageRecipients
 import net.corda.core.messaging.SingleMessageRecipient
-import net.corda.core.node.NodeInfo
-import net.corda.core.node.services.NetworkMapCache
+import net.corda.core.node.MemberInfo
+import net.corda.core.node.distributed
+import net.corda.core.node.services.MembershipGroupCache
 import net.corda.core.node.services.PartyInfo
 import net.corda.core.serialization.SerializationDefaults
 import net.corda.core.serialization.SingletonSerializeAsToken
@@ -23,8 +24,9 @@ import net.corda.node.VersionInfo
 import net.corda.node.internal.LifecycleSupport
 import net.corda.node.internal.artemis.ReactiveArtemisConsumer
 import net.corda.node.internal.artemis.ReactiveArtemisConsumer.Companion.multiplex
-import net.corda.node.services.api.NetworkMapCacheInternal
+import net.corda.node.services.api.MembershipGroupCacheInternal
 import net.corda.node.services.config.NodeConfiguration
+import net.corda.node.services.network.addresses
 import net.corda.node.services.statemachine.DeduplicationId
 import net.corda.node.services.statemachine.ExternalEvent
 import net.corda.node.services.statemachine.SenderDeduplicationId
@@ -87,7 +89,7 @@ class P2PMessagingClient(val config: NodeConfiguration,
                          val serverAddress: NetworkHostAndPort,
                          private val nodeExecutor: AffinityExecutor.ServiceAffinityExecutor,
                          private val database: CordaPersistence,
-                         private val networkMap: NetworkMapCacheInternal,
+                         private val networkMap: MembershipGroupCacheInternal,
                          @Suppress("UNUSED")
                          private val metricRegistry: MetricRegistry,
                          cacheFactory: NamedCacheFactory,
@@ -250,7 +252,7 @@ class P2PMessagingClient(val config: NodeConfiguration,
                 msg.acknowledge()
             }
         }
-        networkChangeSubscription = networkMap.changed.subscribe { updateBridgesOnNetworkChange(it) }
+        networkChangeSubscription = networkMap.changed.subscribe { updateBridgeOnNetworkChange(it) }
     }
 
     private fun sendBridgeControl(message: BridgeControl) {
@@ -262,41 +264,41 @@ class P2PMessagingClient(val config: NodeConfiguration,
         }
     }
 
-    private fun updateBridgesOnNetworkChange(change: NetworkMapCache.MapChange) {
-        log.info("Updating bridges on network map change: ${change::class.simpleName} ${change.node}")
-        fun gatherAddresses(node: NodeInfo): Sequence<BridgeEntry> {
+    @Suppress("ComplexMethod")
+    private fun updateBridgeOnNetworkChange(change: MembershipGroupCache.GroupChange) {
+        log.info("Updating bridge on network map change: ${change::class.simpleName} ${change.memberInfo}")
+        fun gatherAddress(memberInfo: MemberInfo): BridgeEntry? {
             return state.locked {
-                node.legalIdentitiesAndCerts.map {
+                // TODO[DR]: Implement bridge updates for workers using service queue or, alternatively, remove service queue completely.
+                memberInfo.takeIf { !it.distributed }?.let {
                     val messagingAddress = NodeAddress(it.party.owningKey)
-                    BridgeEntry(messagingAddress.queueName, node.addresses, node.legalIdentities.map { it.name }, serviceAddress = false)
-                }.filter { producerSession!!.queueQuery(SimpleString(it.queueName)).isExists }.asSequence()
+                    BridgeEntry(messagingAddress.queueName, it.addresses, listOf(it.party.name), serviceAddress = false)
+                }?.takeIf { producerSession!!.queueQuery(SimpleString(it.queueName)).isExists }
             }
         }
 
-        fun deployBridges(node: NodeInfo) {
-            gatherAddresses(node)
-                    .forEach {
-                        sendBridgeControl(BridgeControl.Create(config.myLegalName.toString(), it))
-                    }
+        fun deployBridge(memberInfo: MemberInfo) {
+            gatherAddress(memberInfo)?.let {
+                sendBridgeControl(BridgeControl.Create(config.myLegalName.toString(), it))
+            }
         }
 
-        fun destroyBridges(node: NodeInfo) {
-            gatherAddresses(node)
-                    .forEach {
-                        sendBridgeControl(BridgeControl.Delete(config.myLegalName.toString(), it))
-                    }
+        fun destroyBridge(memberInfo: MemberInfo) {
+            gatherAddress(memberInfo)?.let {
+                sendBridgeControl(BridgeControl.Delete(config.myLegalName.toString(), it))
+            }
         }
 
         when (change) {
-            is NetworkMapCache.MapChange.Added -> {
-                deployBridges(change.node)
+            is MembershipGroupCache.GroupChange.Added -> {
+                deployBridge(change.memberInfo)
             }
-            is NetworkMapCache.MapChange.Removed -> {
-                destroyBridges(change.node)
+            is MembershipGroupCache.GroupChange.Removed -> {
+                destroyBridge(change.memberInfo)
             }
-            is NetworkMapCache.MapChange.Modified -> {
-                destroyBridges(change.previousNode)
-                deployBridges(change.node)
+            is MembershipGroupCache.GroupChange.Modified -> {
+                destroyBridge(change.previousInfo)
+                deployBridge(change.memberInfo)
             }
         }
     }
@@ -305,9 +307,9 @@ class P2PMessagingClient(val config: NodeConfiguration,
         val requiredBridges = mutableListOf<BridgeEntry>()
         fun createBridgeEntry(queueName: SimpleString) {
             val keyHash = queueName.substring(PEERS_PREFIX.length)
-            val peers = networkMap.getNodesByOwningKeyIndex(keyHash)
+            val peers = networkMap.getMembersByKeyHash(keyHash)
             for (node in peers) {
-                val bridge = BridgeEntry(queueName.toString(), node.addresses, node.legalIdentities.map { it.name }, serviceAddress = false)
+                val bridge = BridgeEntry(queueName.toString(), node.addresses, listOf(node.party.name), serviceAddress = false)
                 requiredBridges += bridge
                 knownQueues += queueName.toString()
             }
@@ -541,9 +543,9 @@ class P2PMessagingClient(val config: NodeConfiguration,
     private fun createQueueIfAbsent(queueName: String, session: ClientSession, exclusive: Boolean, isServiceAddress: Boolean) {
         fun sendBridgeCreateMessage() {
             val keyHash = queueName.substring(PEERS_PREFIX.length)
-            val peers = networkMap.getNodesByOwningKeyIndex(keyHash)
+            val peers = networkMap.getMembersByKeyHash(keyHash)
             for (node in peers) {
-                val bridge = BridgeEntry(queueName, node.addresses, node.legalIdentities.map { it.name }, isServiceAddress)
+                val bridge = BridgeEntry(queueName, node.addresses, listOf(node.party.name), isServiceAddress)
                 val createBridgeMessage = BridgeControl.Create(config.myLegalName.toString(), bridge)
                 sendBridgeControl(createBridgeMessage)
             }

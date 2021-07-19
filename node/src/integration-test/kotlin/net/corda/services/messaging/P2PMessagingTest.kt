@@ -13,6 +13,7 @@ import net.corda.core.utilities.seconds
 import net.corda.node.services.messaging.MessagingService
 import net.corda.node.services.messaging.ReceivedMessage
 import net.corda.node.services.messaging.send
+import net.corda.node.services.network.toPartyInfo
 import net.corda.testing.driver.DriverDSL
 import net.corda.testing.driver.DriverParameters
 import net.corda.testing.driver.InProcess
@@ -54,7 +55,7 @@ class P2PMessagingTest {
             node.respondWith(node.services.myInfo)
         }
         val serviceAddress = originatingNode.services.networkMapCache.run {
-            originatingNode.internalServices.networkService.getAddressOfParty(getPartyInfo(getNotary(serviceName)!!)!!)
+            originatingNode.internalServices.networkService.getAddressOfParty(getMemberByName(serviceName)!!.toPartyInfo())
         }
         val participatingNodes = HashSet<Any>()
         // Try several times so that we can be fairly sure that any node not participating is not due to Artemis' selection

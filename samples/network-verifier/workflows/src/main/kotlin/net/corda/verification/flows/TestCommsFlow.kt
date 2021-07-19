@@ -24,9 +24,7 @@ class TestCommsFlowInitiator(private val x500Name: CordaX500Name? = null) : Flow
     @Suspendable
     override fun call(): List<String> {
         progressTracker.currentStep = SENDING
-        val responses = serviceHub.networkMapCache.allNodes.map {
-            it.legalIdentities.first()
-        }.filterNot {
+        val responses = serviceHub.networkMapCache.allParties.asSequence().filterNot {
             it in serviceHub.myInfo.legalIdentities
         }.filterNot {
             it in serviceHub.networkMapCache.notaryIdentities

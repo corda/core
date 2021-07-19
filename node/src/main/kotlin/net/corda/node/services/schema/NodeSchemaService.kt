@@ -8,6 +8,7 @@ import net.corda.core.schemas.*
 import net.corda.core.schemas.MappedSchemaValidator.crossReferencesToOtherMappedSchema
 import net.corda.core.serialization.SingletonSerializeAsToken
 import net.corda.node.internal.DBNetworkParametersStorage
+import net.corda.node.internal.schemas.MemberInfoSchemaV1
 import net.corda.node.internal.schemas.NodeInfoSchemaV1
 import net.corda.node.services.api.SchemaService
 import net.corda.node.services.events.NodeSchedulerService
@@ -59,6 +60,7 @@ class NodeSchemaService(private val extraSchemas: Set<MappedSchema> = emptySet()
             setOf(CommonSchemaV1,
                     VaultSchemaV1,
                     NodeInfoSchemaV1,
+                    MemberInfoSchemaV1,
                     NodeCoreV1)
 
     val internalSchemas = requiredSchemas + extraSchemas.filter { schema ->

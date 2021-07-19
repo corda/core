@@ -6,6 +6,9 @@ import net.corda.core.flows.ContractUpgradeFlow
 import net.corda.core.internal.cordapp.CordappImpl
 import net.corda.core.internal.location
 import net.corda.node.VersionInfo
+import net.corda.node.internal.membership.flows.PublishMemberInfoResponderFlow
+import net.corda.node.internal.membership.flows.SyncMembershipGroupCacheResponderFlow
+import net.corda.node.services.network.FlowMembershipGroupService
 import net.corda.notary.experimental.bftsmart.BFTSmartNotarySchemaV1
 import net.corda.notary.experimental.bftsmart.BFTSmartNotaryService
 import net.corda.notary.experimental.raft.RaftNotarySchemaV1
@@ -21,15 +24,21 @@ internal object VirtualCordapp {
             ContractUpgradeFlow.Deauthorise::class.java
     )
 
+    /** A list of the membership group initiated flows **/
+    private val membershipGroupInitiatedFlows = listOf(
+            PublishMemberInfoResponderFlow::class.java,
+            SyncMembershipGroupCacheResponderFlow::class.java
+    )
+
     /** A Cordapp representing the core package which is not scanned automatically. */
     fun generateCore(versionInfo: VersionInfo): CordappImpl {
         return CordappImpl(
                 contractClassNames = listOf(),
-                initiatedFlows = listOf(),
+                initiatedFlows = membershipGroupInitiatedFlows,
                 rpcFlows = coreRpcFlows,
                 serviceFlows = listOf(),
                 schedulableFlows = listOf(),
-                services = listOf(),
+                services = listOf(FlowMembershipGroupService::class.java),
                 serializationWhitelists = listOf(),
                 serializationCustomSerializers = listOf(),
                 checkpointCustomSerializers = listOf(),
