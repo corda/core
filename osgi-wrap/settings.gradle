@@ -1,0 +1,4 @@
+rootProject.name = 'osgi-node-experiment'
+include 'osgi-node'
+include 'osgi-wrap'
+

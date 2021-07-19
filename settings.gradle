@@ -127,3 +127,8 @@ include 'serialization-deterministic'
 include 'detekt-plugins'
 include 'tools:error-tool'
 
+// Corda OSGi Node Experiment
+//include 'osgi-node'
+include 'osgi-wrap'
+//~ Corda OSGi Node Experiment
+
