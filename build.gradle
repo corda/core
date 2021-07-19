@@ -332,6 +332,11 @@ allprojects {
         }
     }
 
+    tasks.withType(AbstractArchiveTask) {
+        preserveFileTimestamps = false
+        reproducibleFileOrder = true
+    }
+
     tasks.withType(Test) {
         forkEvery = 20
         ignoreFailures = project.hasProperty('tests.ignoreFailures') ? project.property('tests.ignoreFailures').toBoolean() : false

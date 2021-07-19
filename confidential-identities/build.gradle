@@ -29,6 +29,12 @@ dependencies {
     testCompile "org.assertj:assertj-core:$assertj_version"
 }
 
+cordapp {
+    signing {
+        enabled false
+    }
+}
+
 jar {
     baseName 'corda-confidential-identities'
 }
