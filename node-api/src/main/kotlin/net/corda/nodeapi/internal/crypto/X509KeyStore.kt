@@ -9,6 +9,7 @@ import java.security.KeyStore
 import java.security.PrivateKey
 import java.security.PublicKey
 import java.security.cert.X509Certificate
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Wrapper around a [KeyStore] object but only dealing with [X509Certificate]s and with a better API.
@@ -60,17 +61,25 @@ class X509KeyStore private constructor(val internal: KeyStore, private val store
         return CertificateAndKeyPair(cert, KeyPair(publicKey, getPrivateKey(alias, keyPassword)))
     }
 
+    var privateKeyCache = ConcurrentHashMap<String, PrivateKey>()
+
     fun getPublicKey(alias: String): PublicKey {
         return Crypto.toSupportedPublicKey(getCertificate(alias).publicKey)
     }
 
     fun getPrivateKey(alias: String, keyPassword: String): PrivateKey {
-        return internal.getSupportedKey(alias, keyPassword)
+        var privateKey = privateKeyCache[alias]
+        if(privateKey == null) {
+            privateKey = internal.getSupportedKey(alias, keyPassword)
+            privateKeyCache[alias] = privateKey
+        }
+        return privateKey;
     }
 
     fun setPrivateKey(alias: String, key: PrivateKey, certificates: List<X509Certificate>, keyPassword: String) {
         internal.setKeyEntry(alias, key, keyPassword.toCharArray(), certificates.toTypedArray())
         save()
+        resetCache()
     }
 
     fun setCertificate(alias: String, certificate: X509Certificate) {
@@ -92,5 +101,9 @@ class X509KeyStore private constructor(val internal: KeyStore, private val store
 
     private fun checkWritableToFile(): Path {
         return keyStoreFile ?: throw IllegalStateException("This key store cannot be written to")
+    }
+
+    private fun resetCache() {
+        privateKeyCache.clear()
     }
 }

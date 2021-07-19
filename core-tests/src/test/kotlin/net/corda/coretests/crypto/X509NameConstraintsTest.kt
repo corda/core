@@ -147,6 +147,15 @@ class X509NameConstraintsTest {
 
         val privateKey = keystore.getPrivateKey(X509Utilities.CORDA_CLIENT_TLS, keyPassword)
         assertEquals(X509Utilities.DEFAULT_TLS_SIGNATURE_SCHEME.algorithmName, privateKey.algorithm)
+    }
+
+    @Test
+    fun `test private key retrieval with invalid key`() {
+        val acceptableNames = listOf("CN=Bank A TLS, UID=", "O=Bank A")
+                .map { GeneralSubtree(GeneralName(X500Name(it))) }.toTypedArray()
+
+        val nameConstraints = NameConstraints(acceptableNames, arrayOf())
+        val (keystore, _) = makeKeyStores(X500Name("CN=Bank A"), nameConstraints)
 
         assertFailsWith(UnrecoverableKeyException::class) {
             keystore.getPrivateKey(X509Utilities.CORDA_CLIENT_TLS, "gibberish")
