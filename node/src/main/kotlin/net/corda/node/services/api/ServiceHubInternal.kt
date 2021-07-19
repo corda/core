@@ -14,6 +14,7 @@ import net.corda.core.node.StatesToRecord
 import net.corda.core.node.services.NetworkMapCache
 import net.corda.core.node.services.NetworkMapCacheBase
 import net.corda.core.node.services.TransactionStorage
+import net.corda.core.node.services.vault.PageSpecification
 import net.corda.core.transactions.SignedTransaction
 import net.corda.core.utilities.contextLogger
 import net.corda.node.internal.InitiatedFlowFactory
@@ -267,6 +268,11 @@ interface WritableTransactionStorage : TransactionStorage {
      * a DB transaction.
      */
     fun trackTransactionWithNoWarning(id: SecureHash): CordaFuture<SignedTransaction>
+
+    /**
+     * Returns a page of stored transactions and further fresh ones.
+     */
+    fun trackWithPagingSpec(paging: PageSpecification): DataFeed<TransactionStorage.Page, SignedTransaction>
 }
 
 /**

@@ -14,7 +14,9 @@ import net.corda.core.internal.concurrent.map
 import net.corda.core.internal.rootCause
 import net.corda.core.messaging.DataFeed
 import net.corda.core.messaging.StateMachineTransactionMapping
+import net.corda.core.node.services.TransactionStorage
 import net.corda.core.node.services.Vault
+import net.corda.core.node.services.vault.PageSpecification
 import net.corda.core.serialization.CordaSerializable
 import net.corda.core.serialization.SingletonSerializeAsToken
 import net.corda.core.toFuture
@@ -491,6 +493,89 @@ class TwoPartyTradeFlowTests(private val anonymous: Boolean) {
     }
 
     @Test(timeout=300_000)
+    fun `trackWithPagingSpec works`() {
+        mockNet = InternalMockNetwork(cordappsForAllNodes = listOf(FINANCE_CONTRACTS_CORDAPP))
+        val notaryNode = mockNet.defaultNotaryNode
+        val aliceNode = makeNodeWithTracking(ALICE_NAME)
+        val bobNode = makeNodeWithTracking(BOB_NAME)
+        val bankNode = makeNodeWithTracking(BOC_NAME)
+
+        val notary = mockNet.defaultNotaryIdentity
+        val alice: Party = aliceNode.info.singleIdentity()
+        val bank: Party = bankNode.info.singleIdentity()
+        val bob = bobNode.info.singleIdentity()
+        val issuer = bank.ref(1, 2, 3)
+        aliceNode.services.ledger(notary) {
+            // Insert a prospectus type attachment into the commercial paper transaction.
+            val stream = ByteArrayOutputStream()
+            JarOutputStream(stream).use {
+                it.putNextEntry(ZipEntry("Prospectus.txt"))
+                it.write("Our commercial paper is top notch stuff".toByteArray())
+                it.closeEntry()
+            }
+            val attachmentID = aliceNode.database.transaction {
+                attachment(stream.toByteArray().inputStream())
+            }
+
+            val bobsKey = bobNode.services.keyManagementService.keys.single()
+            val bobsFakeCash = bobNode.database.transaction {
+                fillUpForBuyerAndInsertFakeTransactions(false, issuer, AnonymousParty(bobsKey), notary, bobNode, bob, notaryNode, bankNode)
+            }.second
+
+            val alicesFakePaper = aliceNode.database.transaction {
+                fillUpForSeller(false, issuer, alice,
+                        1200.DOLLARS `issued by` bank.ref(0), attachmentID, notary).second
+            }
+
+            insertFakeTransactions(alicesFakePaper, aliceNode, alice, notaryNode, bankNode)
+
+            val aliceTxStream = aliceNode.services.validatedTransactions.trackWithPagingSpec(PageSpecification(1, 200)).updates
+            val aliceTxMappings = with(aliceNode) {
+                database.transaction { services.stateMachineRecordedTransactionMapping.track().updates }
+            }
+            val aliceSmId = runBuyerAndSeller(notary, bob, aliceNode, bobNode,
+                    "alice's paper".outputStateAndRef()).sellerId
+
+            mockNet.runNetwork()
+
+            // test paged tx snapshot for alice
+            val aliceTxPagedSnapshot = aliceNode.services.validatedTransactions.trackWithPagingSpec(PageSpecification(2,2)).snapshot
+            assertEquals(aliceTxPagedSnapshot.totalTransactionsAvailable,5)
+            assertEquals(aliceTxPagedSnapshot.transactions.size, 2)
+            assertEquals(aliceTxPagedSnapshot.transactions[0].signedTransaction.id, bobsFakeCash[2].id)
+            assertEquals(aliceTxPagedSnapshot.transactions[1].signedTransaction.id, bobsFakeCash[0].id)
+            // We need to declare this here, if we do it inside [expectEvents] kotlin throws an internal compiler error(!).
+            val aliceTxExpectations = sequence(
+                    expect { tx: SignedTransaction ->
+                        require(tx.id == bobsFakeCash[0].id)
+                    },
+                    expect { tx: SignedTransaction ->
+                        require(tx.id == bobsFakeCash[2].id)
+                    },
+                    expect { tx: SignedTransaction ->
+                        require(tx.id == bobsFakeCash[1].id)
+                    }
+            )
+            aliceTxStream.expectEvents { aliceTxExpectations }
+            val aliceMappingExpectations = sequence(
+                    expect<StateMachineTransactionMapping> { (stateMachineRunId, transactionId) ->
+                        require(stateMachineRunId == aliceSmId)
+                        require(transactionId == bobsFakeCash[0].id)
+                    },
+                    expect<StateMachineTransactionMapping> { (stateMachineRunId, transactionId) ->
+                        require(stateMachineRunId == aliceSmId)
+                        require(transactionId == bobsFakeCash[2].id)
+                    },
+                    expect { (stateMachineRunId, transactionId) ->
+                        require(stateMachineRunId == aliceSmId)
+                        require(transactionId == bobsFakeCash[1].id)
+                    }
+            )
+            aliceTxMappings.expectEvents { aliceMappingExpectations }
+        }
+    }
+
+    @Test(timeout=300_000)
 	fun `dependency with error on buyer side`() {
         mockNet = InternalMockNetwork(cordappsForAllNodes = listOf(FINANCE_CONTRACTS_CORDAPP))
         mockNet.defaultNotaryNode.services.ledger(mockNet.defaultNotaryIdentity) {
@@ -742,6 +827,12 @@ class TwoPartyTradeFlowTests(private val anonymous: Boolean) {
         override fun track(): DataFeed<List<SignedTransaction>, SignedTransaction> {
             return database.transaction {
                 delegate.track()
+            }
+        }
+
+        override fun trackWithPagingSpec(paging: PageSpecification): DataFeed<TransactionStorage.Page, SignedTransaction> {
+            return database.transaction {
+                delegate.trackWithPagingSpec(paging)
             }
         }
 

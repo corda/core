@@ -5,8 +5,10 @@ import net.corda.core.DoNotImplement
 import net.corda.core.concurrent.CordaFuture
 import net.corda.core.crypto.SecureHash
 import net.corda.core.messaging.DataFeed
+import net.corda.core.serialization.CordaSerializable
 import net.corda.core.transactions.SignedTransaction
 import rx.Observable
+import java.time.Instant
 
 /**
  * Thread-safe storage of transactions.
@@ -34,4 +36,14 @@ interface TransactionStorage {
      * Returns a future that completes with the transaction corresponding to [id] once it has been committed
      */
     fun trackTransaction(id: SecureHash): CordaFuture<SignedTransaction>
+
+    @CordaSerializable
+    data class Page(val transactions: List<RecordedTransaction>, val totalTransactionsAvailable: Long)
+
+    @CordaSerializable
+    data class RecordedTransaction(val signedTransaction: SignedTransaction, val timestamp: Instant, val verified: Boolean)
+
+    class TransactionsQueryException(description: String, cause: Exception? = null) : Exception(description, cause) {
+        constructor(description: String) : this(description, null)
+    }
 }

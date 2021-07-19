@@ -39,6 +39,7 @@ import net.corda.core.node.NodeDiagnosticInfo
 import net.corda.core.node.NodeInfo
 import net.corda.core.node.services.AttachmentId
 import net.corda.core.node.services.NetworkMapCache
+import net.corda.core.node.services.TransactionStorage
 import net.corda.core.node.services.Vault
 import net.corda.core.node.services.vault.AttachmentQueryCriteria
 import net.corda.core.node.services.vault.AttachmentSort
@@ -136,6 +137,16 @@ internal class CordaRPCOpsImpl(
                                                   contractStateType: Class<out T>): DataFeed<Vault.Page<T>, Vault.Update<T>> {
         contractStateType.checkIsA<ContractState>()
         return services.vaultService._trackBy(criteria, paging, sorting, contractStateType)
+    }
+
+    override fun transactionsSnapshotWithPagingSpec(pagingSpec: PageSpecification): TransactionStorage.Page {
+        val (snapshot, updates) = transactionsFeedWithPagingSpec(pagingSpec)
+        updates.notUsed()
+        return snapshot
+    }
+
+    override fun transactionsFeedWithPagingSpec(pagingSpec: PageSpecification): DataFeed<TransactionStorage.Page, SignedTransaction> {
+        return services.validatedTransactions.trackWithPagingSpec(pagingSpec)
     }
 
     @Suppress("OverridingDeprecatedMember", "DEPRECATION")

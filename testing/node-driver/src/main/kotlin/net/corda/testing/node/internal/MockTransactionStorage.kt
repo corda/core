@@ -4,6 +4,8 @@ import net.corda.core.concurrent.CordaFuture
 import net.corda.core.crypto.SecureHash
 import net.corda.core.internal.concurrent.doneFuture
 import net.corda.core.messaging.DataFeed
+import net.corda.core.node.services.TransactionStorage
+import net.corda.core.node.services.vault.PageSpecification
 import net.corda.core.serialization.SingletonSerializeAsToken
 import net.corda.core.toFuture
 import net.corda.core.transactions.SignedTransaction
@@ -11,6 +13,7 @@ import net.corda.node.services.api.WritableTransactionStorage
 import net.corda.testing.node.MockServices
 import rx.Observable
 import rx.subjects.PublishSubject
+import java.time.Instant
 import java.util.*
 
 /**
@@ -27,6 +30,10 @@ open class MockTransactionStorage : WritableTransactionStorage, SingletonSeriali
 
     override fun track(): DataFeed<List<SignedTransaction>, SignedTransaction> {
         return DataFeed(txns.values.mapNotNull { if (it.isVerified) it.stx else null }, _updatesPublisher)
+    }
+
+    override fun trackWithPagingSpec(paging: PageSpecification): DataFeed<TransactionStorage.Page, SignedTransaction> {
+        return DataFeed(TransactionStorage.Page(txns.values.mapNotNull { TransactionStorage.RecordedTransaction(it.stx, Instant.now(),it.isVerified) }, 0), _updatesPublisher);
     }
 
     private val txns = HashMap<SecureHash, TxHolder>()

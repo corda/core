@@ -19,11 +19,13 @@ import net.corda.core.internal.RPC_UPLOADER
 import net.corda.core.internal.uncheckedCast
 import net.corda.core.messaging.*
 import net.corda.core.node.services.StatesNotAvailableException
+import net.corda.core.node.services.TransactionStorage
 import net.corda.core.node.services.Vault
 import net.corda.core.node.services.queryBy
 import net.corda.core.node.services.vault.AttachmentQueryCriteria
 import net.corda.core.node.services.vault.ColumnPredicate
 import net.corda.core.node.services.vault.EqualityComparisonOperator
+import net.corda.core.node.services.vault.PageSpecification
 import net.corda.core.transactions.SignedTransaction
 import net.corda.core.utilities.NonEmptySet
 import net.corda.core.utilities.OpaqueBytes
@@ -263,6 +265,131 @@ class CordaRPCOpsImplTest {
                         }
                 )
             }
+        }
+    }
+
+    @Test(timeout=300_000)
+    fun `test transactionsFeedWithPagingSpec`() {
+        CURRENT_RPC_CONTEXT.set(RpcAuthContext(InvocationContext.rpc(testActor()), buildSubject("TEST_USER", emptySet())))
+        withPermissions(
+                invokeRpc(CordaRPCOps::stateMachinesFeed),
+                invokeRpc(CordaRPCOps::transactionsFeedWithPagingSpec),
+                invokeRpc("vaultTrackBy"),
+                startFlow<CashIssueFlow>(),
+                startFlow<CashPaymentFlow>()
+        ) {
+            aliceNode.database.transaction {
+                stateMachineUpdates = rpc.stateMachinesFeed().updates
+                transactions = rpc.transactionsFeedWithPagingSpec(PageSpecification(1, 2)).updates
+                vaultTrackCash = rpc.vaultTrackBy<Cash.State>().updates
+            }
+
+            val result = rpc.startFlow(::CashIssueFlow, 100.DOLLARS, OpaqueBytes.of(1), notary)
+
+            mockNet.runNetwork()
+
+            rpc.startFlow(::CashPaymentFlow, 100.DOLLARS, alice)
+
+            mockNet.runNetwork()
+
+            var issueSmId: StateMachineRunId? = null
+            var paymentSmId: StateMachineRunId? = null
+            var paymentRecSmId: StateMachineRunId? = null
+            stateMachineUpdates.expectEvents {
+                sequence(
+                        // ISSUE
+                        expect { add: StateMachineUpdate.Added ->
+                            issueSmId = add.id
+                        },
+                        expect { remove: StateMachineUpdate.Removed ->
+                            assertThat(remove.id).isEqualTo(issueSmId)
+                        },
+                        // PAYMENT
+                        expect { add: StateMachineUpdate.Added ->
+                            paymentSmId = add.id
+                        },
+                        expect { add: StateMachineUpdate.Added ->
+                            paymentRecSmId = add.id
+                        },
+                        expect { remove: StateMachineUpdate.Removed ->
+                            assertThat(remove.id).isEqualTo(paymentRecSmId)
+                        },
+                        expect { remove: StateMachineUpdate.Removed ->
+                            assertThat(remove.id).isEqualTo(paymentSmId)
+                        }
+                )
+            }
+
+            result.returnValue.getOrThrow()
+            transactions.expectEvents {
+                sequence(
+                        // ISSUE
+                        expect { stx ->
+                            require(stx.tx.inputs.isEmpty())
+                            require(stx.tx.outputs.size == 1)
+                            val signaturePubKeys = stx.sigs.map { it.by }.toSet()
+                            // Only Alice signed, as issuer
+                            val aliceKey = alice.owningKey
+                            require(signaturePubKeys.size <= aliceKey.keys.size)
+                            require(aliceKey.isFulfilledBy(signaturePubKeys))
+                        },
+                        // MOVE
+                        expect { stx ->
+                            require(stx.tx.inputs.size == 1)
+                            require(stx.tx.outputs.size == 1)
+                            val signaturePubKeys = stx.sigs.map { it.by }.toSet()
+                            // Alice and Notary signed
+                            require(aliceNode.services.keyManagementService.filterMyKeys(signaturePubKeys).toList().isNotEmpty())
+                            require(notary.owningKey.isFulfilledBy(signaturePubKeys))
+                        }
+                )
+            }
+
+            vaultTrackCash.expectEvents {
+                sequence(
+                        // ISSUE
+                        expect { (consumed, produced) ->
+                            require(consumed.isEmpty()) { consumed.size }
+                            require(produced.size == 1) { produced.size }
+                        },
+                        // MOVE
+                        expect { (consumed, produced) ->
+                            require(consumed.size == 1) { consumed.size }
+                            require(produced.size == 1) { produced.size }
+                        }
+                )
+            }
+        }
+    }
+
+    @Test(timeout=300_000)
+    fun `test transactionsSnapshotWithPagingSpec`() {
+        CURRENT_RPC_CONTEXT.set(RpcAuthContext(InvocationContext.rpc(testActor()), buildSubject("TEST_USER", emptySet())))
+        withPermissions(
+                invokeRpc(CordaRPCOps::transactionsSnapshotWithPagingSpec),
+                startFlow<CashIssueFlow>(),
+                startFlow<CashPaymentFlow>()
+        ) {
+            rpc.startFlow(::CashIssueFlow, 100.DOLLARS, OpaqueBytes.of(1), notary)
+            mockNet.runNetwork()
+            rpc.startFlow(::CashPaymentFlow, 100.DOLLARS, alice)
+            mockNet.runNetwork()
+            val txPagedSnapshot = rpc.transactionsSnapshotWithPagingSpec(PageSpecification(1, 2))
+            assertEquals(txPagedSnapshot.totalTransactionsAvailable, 2)
+            // verify payment tx details
+            assertEquals(txPagedSnapshot.transactions[0].signedTransaction.tx.inputs.size, 1)
+            assertEquals(txPagedSnapshot.transactions[0].signedTransaction.tx.outputs.size, 1)
+            val signaturePubKeys = txPagedSnapshot.transactions[0].signedTransaction.sigs.map { it.by }.toSet()
+            require(aliceNode.services.keyManagementService.filterMyKeys(signaturePubKeys).toList().isNotEmpty())
+            require(notary.owningKey.isFulfilledBy(signaturePubKeys))
+
+            // verify issue tx details
+            assertEquals(txPagedSnapshot.transactions[1].signedTransaction.tx.inputs.size, 0)
+            assertEquals(txPagedSnapshot.transactions[1].signedTransaction.tx.outputs.size, 1)
+            val signaturePubKeys2 = txPagedSnapshot.transactions[1].signedTransaction.sigs.map { it.by }.toSet()
+            val aliceKey = alice.owningKey
+            require(signaturePubKeys2.size <= aliceKey.keys.size)
+            require(aliceKey.isFulfilledBy(signaturePubKeys2))
         }
     }
 

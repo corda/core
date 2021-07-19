@@ -9,6 +9,11 @@ import net.corda.core.internal.VisibleForTesting
 import net.corda.core.internal.bufferUntilSubscribed
 import net.corda.core.internal.concurrent.doneFuture
 import net.corda.core.messaging.DataFeed
+import net.corda.core.node.services.TransactionStorage
+import net.corda.core.node.services.vault.DEFAULT_PAGE_NUM
+import net.corda.core.node.services.vault.DEFAULT_PAGE_SIZE
+import net.corda.core.node.services.vault.MAX_PAGE_SIZE
+import net.corda.core.node.services.vault.PageSpecification
 import net.corda.core.serialization.*
 import net.corda.core.serialization.internal.effectiveSerializationEnv
 import net.corda.core.toFuture
@@ -222,6 +227,19 @@ class DBTransactionStorage(private val database: CordaPersistence, cacheFactory:
         }
     }
 
+    /**
+     *  track with paging specification
+     * */
+    override fun trackWithPagingSpec(paging: PageSpecification): DataFeed<TransactionStorage.Page, SignedTransaction> {
+        return database.transaction {
+            var totalTransactions = 0L
+            txStorage.locked {
+                totalTransactions = txStorage.content.size
+            }
+            DataFeed(pagedSnapshot(paging, totalTransactions), updates.bufferUntilSubscribed())
+        }
+    }
+
     override fun trackTransaction(id: SecureHash): CordaFuture<SignedTransaction> {
         val (transaction, warning) = trackTransactionInternal(id)
         warning?.also { log.warn(it) }
@@ -265,6 +283,50 @@ class DBTransactionStorage(private val database: CordaPersistence, cacheFactory:
         return txStorage.content.allPersisted.use {
             it.filter { it.second.status.isVerified() }.map { it.second.toSignedTx() }.toList()
         }
+    }
+
+    /**
+     * returns a Paged Snapshot with give paging spec by querying transaction db
+     */
+    private fun pagedSnapshot(paging_: PageSpecification, totalTransactions: Long): TransactionStorage.Page {
+        val paging = if (paging_.pageSize == Integer.MAX_VALUE) {
+            paging_.copy(pageSize = Integer.MAX_VALUE - 1)
+        } else {
+            paging_
+        }
+        log.debug("Paging spec for transaction snapshot: $paging")
+        // pagination checks
+        if (!paging.isDefault) {
+            // pagination
+            if (paging.pageNumber < DEFAULT_PAGE_NUM) throw TransactionStorage.TransactionsQueryException("invalid page number ${paging.pageNumber} [page numbers start from $DEFAULT_PAGE_NUM]")
+            if (paging.pageSize < 1) throw TransactionStorage.TransactionsQueryException("invalid page size ${paging.pageSize} [minimum is 1]")
+        }
+        //query
+        val session = currentDBSession()
+        val cb = session.criteriaBuilder
+        val criteriaQuery = cb.createQuery(DBTransaction::class.java)
+        val root = criteriaQuery.from(DBTransaction::class.java)
+        criteriaQuery.select(root)
+        criteriaQuery.orderBy(cb.desc(root.get<Instant>("timestamp")))
+        val query = session.createQuery(criteriaQuery)
+
+        query.firstResult = maxOf(0, (paging.pageNumber - 1) * paging.pageSize)
+        val pageSize = paging.pageSize + 1
+        query.maxResults = if (pageSize > 0) pageSize else DEFAULT_PAGE_SIZE// detection too many results, protected against overflow
+
+        // final pagination check
+        if (query.maxResults > MAX_PAGE_SIZE) {
+            throw TransactionStorage.TransactionsQueryException("The requested page size ${query.maxResults} exceeds the limit of $MAX_PAGE_SIZE")
+        }
+        //execute
+        val results = query.resultList
+        val recordedTransactions: MutableList<TransactionStorage.RecordedTransaction> = mutableListOf()
+        results.asSequence().forEachIndexed { index, dbTransaction ->
+            if (index == paging.pageSize) // skip last result
+                return@forEachIndexed
+            recordedTransactions.add(TransactionStorage.RecordedTransaction(dbTransaction.transaction.deserialize(context = contextToUse()), dbTransaction.timestamp, dbTransaction.status.isVerified()))
+        }
+        return TransactionStorage.Page(recordedTransactions, totalTransactions)
     }
 
     // Cache value type to just store the immutable bits of a signed transaction plus conversion helpers

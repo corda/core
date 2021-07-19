@@ -16,6 +16,7 @@ import net.corda.core.node.NodeDiagnosticInfo
 import net.corda.core.node.NodeInfo
 import net.corda.core.node.services.AttachmentId
 import net.corda.core.node.services.NetworkMapCache
+import net.corda.core.node.services.TransactionStorage
 import net.corda.core.node.services.Vault
 import net.corda.core.node.services.VaultQueryException
 import net.corda.core.node.services.vault.*
@@ -184,6 +185,25 @@ interface CordaRPCOps : RPCOps {
 
     fun <T : ContractState> vaultTrackByWithSorting(contractStateType: Class<out T>, criteria: QueryCriteria, sorting: Sort): DataFeed<Vault.Page<T>, Vault.Update<T>>
     // DOCEND VaultTrackAPIHelpers
+
+    /**
+     * Returns a paged snapshot of transactions ordered by timestamp (In Ascending order) for a given paging specification
+     *
+     *  returns a [TransactionStorage.Page] object containing the following:
+     *  1. signedTransactions as a List of <TransactionStorage.RecordedTransaction> (page number and size defined by [PageSpecification])
+     *  2. totalTransactionsAvailable, total number of recorded transactions
+     *
+     * @throws TransactionStorage.TransactionsQueryException if there are paging errors
+     */
+    fun transactionsSnapshotWithPagingSpec(pagingSpec: PageSpecification): TransactionStorage.Page
+
+    /**
+     * Returns a paged snapshot of transactions ordered by timestamp (In Ascending order), with paging spec., and observable for future transactions
+     *
+     * @throws TransactionStorage.TransactionsQueryException if there are paging errors
+     */
+    @RPCReturnsObservables
+    fun transactionsFeedWithPagingSpec(pagingSpec: PageSpecification): DataFeed<TransactionStorage.Page, SignedTransaction>
 
     /**
      * @suppress Returns a list of all recorded transactions.
