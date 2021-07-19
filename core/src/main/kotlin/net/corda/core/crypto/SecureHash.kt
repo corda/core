@@ -50,6 +50,7 @@ sealed class SecureHash(bytes: ByteArray) : OpaqueBytes(bytes) {
         }
     }
 
+    // *** AK *** TODO pull the `val algorithm: String` to the "top" level
     class HASH(val algorithm: String, bytes: ByteArray) : SecureHash(bytes) {
         override fun equals(other: Any?): Boolean {
             return when {
@@ -78,12 +79,19 @@ sealed class SecureHash(bytes: ByteArray) : OpaqueBytes(bytes) {
      * Returns the first [prefixLen] hexadecimal digits of the [SecureHash] value.
      * @param prefixLen The number of characters in the prefix.
      */
+    // *** AK *** TODO: rename as it's used in log output but it's not clear from the name
+    // also it'll output unexpected result as it doesn't take into account the
+    // algorithm name
     fun prefixChars(prefixLen: Int = 6) = toHexString().substring(0, prefixLen)
 
     /**
      * Append a second hash value to this hash value, and then compute the SHA-256 hash of the result.
      * @param other The hash to append to this one.
      */
+    // *** AK *** TODO: remove as it appears not used (at least in the OS)
+    // also it's always returns SHA256 regardless of what we want
+    // also do we care if the other and this use different algorithms and
+    // can it be different from the resulting algorithm?
     fun hashConcat(other: SecureHash) = (this.bytes + other.bytes).sha256()
 
     /**
@@ -121,6 +129,8 @@ sealed class SecureHash(bytes: ByteArray) : OpaqueBytes(bytes) {
     fun reHash() : SecureHash = hashAs(algorithm, bytes)
 
     // Like static methods in Java, except the 'companion' is a singleton that can have state.
+    // *** AK *** TODO: consider to remove all static helpers to calculate the hash and get information (like digestFor) as it
+    //  MUST be done on a service (there could be different list of available algorithms per sandbox), leave here only parsing
     companion object {
         const val SHA2_256 = "SHA-256"
         const val SHA2_384 = "SHA-384"
@@ -132,6 +142,9 @@ sealed class SecureHash(bytes: ByteArray) : OpaqueBytes(bytes) {
          * @param str An optional algorithm id followed by a delimiter and the sequence of hexadecimal digits that represents a hash value.
          * @throws IllegalArgumentException The input string does not contain the expected number of hexadecimal digits, or it contains incorrectly-encoded characters.
          */
+        // *** AK *** TODO: modify to expect that the prefix mut be always present and rename to parse (the other pase will have to be removed)
+        // and the create name is very..vey misleading as that assumes that the hash is calculated here but in fact it's just being parsed
+        // parsing is "static" safe as it just converts from the string form to the byte array with the algorithm prefix
         @JvmStatic
         fun create(str: String?): SecureHash {
             val txt = str ?: throw IllegalArgumentException("Provided string is null")
@@ -153,6 +166,7 @@ sealed class SecureHash(bytes: ByteArray) : OpaqueBytes(bytes) {
          * @param algorithm [MessageDigest] algorithm name, in uppercase.
          * @param value Hash value as a hexadecimal string.
          */
+        // *** AK *** TODO: can be combined with the new parse (former create)
         private fun decode(algorithm: String, value: String): SecureHash {
             val digestLength = digestFor(algorithm).digestLength
             val data = value.parseAsHex()
@@ -167,6 +181,7 @@ sealed class SecureHash(bytes: ByteArray) : OpaqueBytes(bytes) {
          * @param str A sequence of 64 hexadecimal digits that represents a SHA-256 hash value.
          * @throws IllegalArgumentException The input string does not contain 64 hexadecimal digits, or it contains incorrectly-encoded characters.
          */
+        // *** AK *** TODO: remove
         @JvmStatic
         fun parse(str: String?): SHA256 {
             return str?.toUpperCase()?.parseAsHex()?.let {
@@ -375,6 +390,7 @@ fun OpaqueBytes.hashAs(algorithm: String): SecureHash = SecureHash.hashAs(algori
 /**
  * Hash algorithm.
  */
+// *** AK *** TODO: Has to go as all hashes will have the algorithm now
 val SecureHash.algorithm: String get() = if (this is SecureHash.HASH) algorithm else SecureHash.SHA2_256
 
 /**
