@@ -19,7 +19,7 @@ val baseArgs = CliParser()
 
 fun main(args: Array<String>) {
     SerializationEngine.init()
-    CommandLine(baseArgs).parse(*args)
+    CommandLine(baseArgs).parseArgs(*args)
     testDockerConnectivity()
 
     if (baseArgs.usageHelpRequested) {
@@ -35,7 +35,7 @@ fun main(args: Array<String>) {
     val argParser: CliParser = when (baseArgs.backendType) {
         AZURE -> {
             val azureArgs = AzureParser()
-            CommandLine(azureArgs).parse(*args)
+            CommandLine(azureArgs).parseArgs(*args)
             azureArgs
         }
         Backend.BackendType.LOCAL_DOCKER -> baseArgs

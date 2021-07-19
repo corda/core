@@ -33,8 +33,6 @@ class InitialRegistrationCli(val startup: NodeStartup): CliWrapperBase("initial-
         return startup.initialiseAndRun(cmdLineOptions, InitialRegistration(cmdLineOptions.baseDirectory, networkRootTrustStorePath, networkRootTrustStorePassword, skipSchemaCreation, startup))
     }
 
-    override fun initLogging(): Boolean = this.initLogging(cmdLineOptions.baseDirectory)
-
     @Mixin
     val cmdLineOptions = InitialRegistrationCmdLineOptions()
 }

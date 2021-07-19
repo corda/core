@@ -8,6 +8,7 @@ import org.assertj.core.api.Assertions
 import org.junit.BeforeClass
 import org.junit.Ignore
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import org.slf4j.LoggerFactory
 import org.slf4j.event.Level
 import picocli.CommandLine
@@ -78,9 +79,47 @@ class NodeStartupCliTest {
         node.verbose = true
         // With verbose set, initLogging can accidentally attempt to access a logger before all required system properties are set. This
         // causes the logging config to be parsed too early, resulting in logs being written to the wrong directory
-        node.initLogging(dir)
+        node.initLogging()
         LoggerFactory.getLogger("").debug("Test message")
         assertTrue(dir.resolve("logs").exists())
         assertFalse(Paths.get("./logs").exists())
+    }
+
+    @Test(timeout = 300_000)
+    fun `assert that logging options are parsed are set correctly when are placed before a command`() {
+
+        val temporaryFolder = TemporaryFolder()
+        temporaryFolder.create()
+        val baseDir = temporaryFolder.newFolder("baseDir")
+
+        startup.args = arrayOf()
+
+        startup.cmd.parseArgs("--logging-level=DEBUG", "--log-to-console",
+                "--base-directory", baseDir.absolutePath,
+                "initial-registration", "--network-root-truststore-password=password")
+
+        Assertions.assertThat(startup.loggingLevel).isEqualTo(Level.DEBUG)
+        Assertions.assertThat(startup.verbose).isEqualTo(true)
+        Assertions.assertThat(startup.cmdLineOptions.baseDirectory.toString()).isEqualTo(baseDir.absolutePath)
+    }
+
+    @Test(timeout = 300_000)
+    fun `assert that logging options are parsed are set correctly when are placed after a command`() {
+
+        val temporaryFolder = TemporaryFolder()
+        temporaryFolder.create()
+        val baseDir = temporaryFolder.newFolder("baseDir")
+
+        startup.args = arrayOf()
+
+        startup.cmd.parseArgs(
+                "--base-directory", baseDir.absolutePath,
+                "initial-registration", "--network-root-truststore-password=password",
+                "--logging-level=DEBUG", "--log-to-console"
+        )
+
+        Assertions.assertThat(startup.loggingLevel).isEqualTo(Level.DEBUG)
+        Assertions.assertThat(startup.verbose).isEqualTo(true)
+        Assertions.assertThat(startup.cmdLineOptions.baseDirectory.toString()).isEqualTo(baseDir.absolutePath)
     }
 }

@@ -122,7 +122,7 @@ buildscript {
     ext.snappy_version = '0.4'
     ext.class_graph_version = constants.getProperty('classgraphVersion')
     ext.jcabi_manifests_version = '1.1'
-    ext.picocli_version = '3.9.6'
+    ext.picocli_version = '4.5.1'
     ext.commons_lang_version = '3.9'
     ext.commons_io_version = '2.6'
     ext.controlsfx_version = '8.40.15'

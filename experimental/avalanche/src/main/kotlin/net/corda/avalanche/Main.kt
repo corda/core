@@ -8,7 +8,7 @@ import kotlin.collections.LinkedHashMap
 fun main(args: Array<String>) {
 
     val parameters = Parameters()
-    CommandLine(parameters).parse(*args)
+    CommandLine(parameters).parseArgs(*args)
     if (parameters.helpRequested) {
         CommandLine.usage(Parameters(), System.out)
         return

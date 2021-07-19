@@ -7,7 +7,6 @@ import net.corda.cliutils.ExitCodes
 import net.corda.common.configuration.parsing.internal.Configuration
 import net.corda.core.utilities.loggerFor
 import net.corda.node.SharedNodeCmdLineOptions
-import net.corda.node.internal.initLogging
 import net.corda.node.services.config.schema.v1.V1NodeConfigurationSpec
 import net.corda.nodeapi.internal.config.toConfigValue
 import picocli.CommandLine.Mixin
@@ -31,8 +30,6 @@ internal class ValidateConfigurationCli : CliWrapperBase("validate-configuration
 
     @Mixin
     private val cmdLineOptions = SharedNodeCmdLineOptions()
-
-    override fun initLogging(): Boolean = initLogging(cmdLineOptions.baseDirectory)
 
     override fun runProgram(): Int {
         val rawConfig = cmdLineOptions.rawConfiguration().doOnErrors(cmdLineOptions::logRawConfigurationErrors).optional ?: return ExitCodes.FAILURE
