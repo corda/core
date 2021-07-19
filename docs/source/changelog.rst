@@ -4,7 +4,16 @@ Changelog
 Here's a summary of what's changed in each Corda release. For guidance on how to upgrade code from the previous
 release, see :doc:`app-upgrade-notes`.
 
-Unreleased
+
+.. _changelog_v4.4:
+
+Version 4.4
+----------
+* 
+
+.. _changelog_v4.3:
+
+Version 4.3
 ----------
 
 * Added ability for ``CordaService`` to register for receiving node lifecycle events to perform initialisation and clean-up actions.
