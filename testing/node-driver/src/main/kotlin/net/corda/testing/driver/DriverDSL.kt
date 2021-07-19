@@ -5,6 +5,7 @@ import net.corda.core.concurrent.CordaFuture
 import net.corda.core.identity.CordaX500Name
 import net.corda.core.identity.Party
 import net.corda.core.internal.concurrent.map
+import net.corda.nodeapi.internal.ShutdownHook
 import net.corda.testing.node.NotarySpec
 import net.corda.testing.node.User
 import java.nio.file.Path
@@ -52,6 +53,8 @@ interface DriverDSL {
                 it.singleOrNull() ?: throw IllegalStateException("Default notary is not a single node")
             }
         }
+
+    var autoShutdownNodes: Boolean
 
     /**
      * Start a node using the default values of [NodeParameters].
@@ -177,4 +180,6 @@ interface DriverDSL {
      * Returns the next port to use when instantiating test processes that must not conflict on the same machine
      */
     fun nextPort() = PortAllocation.defaultAllocator.nextPort()
+
+    fun handleAutoShutdown(hook: ShutdownHook, closeable: AutoCloseable?)
 }

@@ -22,6 +22,7 @@ import net.corda.testing.node.NotarySpec
 import net.corda.testing.node.TestCordapp
 import net.corda.testing.node.User
 import net.corda.testing.node.internal.DriverDSLImpl
+import net.corda.testing.node.internal.InternalDriverDSL
 import net.corda.testing.node.internal.genericDriver
 import net.corda.testing.node.internal.getTimestampAsDirectoryName
 import net.corda.testing.node.internal.newContext
@@ -193,7 +194,7 @@ constructor(
  * @param dsl The dsl itself.
  * @return The value returned in the [dsl] closure.
  */
-fun <A> driver(defaultParameters: DriverParameters = DriverParameters(), dsl: DriverDSL.() -> A): A {
+fun <A> driver(defaultParameters: DriverParameters = DriverParameters(), dsl: InternalDriverDSL.() -> A): A {
     return genericDriver(
             driverDsl = DriverDSLImpl(
                     portAllocation = defaultParameters.portAllocation,
@@ -216,11 +217,11 @@ fun <A> driver(defaultParameters: DriverParameters = DriverParameters(), dsl: Dr
                     djvmCordaSource = defaultParameters.djvmCordaSource,
                     environmentVariables = defaultParameters.environmentVariables,
                     allowHibernateToManageAppSchema = defaultParameters.allowHibernateToManageAppSchema,
-                    premigrateH2Database = defaultParameters.premigrateH2Database
+                    premigrateH2Database = defaultParameters.premigrateH2Database,
+                    autoShutdownNodes = defaultParameters.autoShutdownNodes
             ),
             coerce = { it },
-            dsl = dsl
-    )
+            dsl = dsl)
 }
 
 /**
@@ -281,7 +282,8 @@ data class DriverParameters(
         val djvmCordaSource: List<Path> = emptyList(),
         val environmentVariables: Map<String, String> = emptyMap(),
         val allowHibernateToManageAppSchema: Boolean = true,
-        val premigrateH2Database: Boolean = true
+        val premigrateH2Database: Boolean = true,
+        val autoShutdownNodes: Boolean = true
 ) {
     constructor(cordappsForAllNodes: Collection<TestCordapp>) : this(isDebug = false, cordappsForAllNodes = cordappsForAllNodes)
 
@@ -487,6 +489,7 @@ data class DriverParameters(
     fun withDjvmCordaSource(djvmCordaSource: List<Path>): DriverParameters = copy(djvmCordaSource = djvmCordaSource)
     fun withEnvironmentVariables(variables: Map<String, String>): DriverParameters = copy(environmentVariables = variables)
     fun withAllowHibernateToManageAppSchema(value: Boolean): DriverParameters = copy(allowHibernateToManageAppSchema = value)
+    fun withAutoShutdownNodes(value: Boolean): DriverParameters = copy(autoShutdownNodes = value)
 
     fun copy(
             isDebug: Boolean,
