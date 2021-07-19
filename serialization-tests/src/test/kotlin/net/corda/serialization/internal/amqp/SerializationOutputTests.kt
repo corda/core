@@ -217,9 +217,15 @@ class SerializationOutputTests(private val compression: CordaSerializationEncodi
                                                 factory: SerializerFactory = defaultFactory(),
                                                 freshDeserializationFactory: SerializerFactory = defaultFactory(),
                                                 expectedEqual: Boolean = true,
-                                                expectDeserializedEqual: Boolean = true): T {
+                                                expectDeserializedEqual: Boolean = true,
+                                                reproducableInput: Boolean = true): T {
         val ser = SerializationOutput(factory)
         val bytes = ser.serialize(obj, compression)
+
+        if(reproducableInput) {
+            val unoptimizedBytes = ser.serializeUnoptimized(obj, testSerializationContext.withEncoding(compression))
+            assertThat(bytes).isEqualTo(unoptimizedBytes).withFailMessage("failed to serialize {}", obj)
+        }
 
         val decoder = DecoderImpl().apply {
             this.register(Envelope.DESCRIPTOR, Envelope)
@@ -1244,7 +1250,7 @@ class SerializationOutputTests(private val compression: CordaSerializationEncodi
         factory2.register(net.corda.serialization.internal.amqp.custom.InputStreamSerializer)
         val bytes = ByteArray(10) { it.toByte() }
         val obj = bytes.inputStream()
-        val obj2 = serdes(obj, factory, factory2, expectedEqual = false, expectDeserializedEqual = false)
+        val obj2 = serdes(obj, factory, factory2, expectedEqual = false, expectDeserializedEqual = false, reproducableInput = false)
         val obj3 = bytes.inputStream()  // Can't use original since the stream pointer has moved.
         assertEquals(obj3.available(), obj2.available())
         assertEquals(obj3.read(), obj2.read())

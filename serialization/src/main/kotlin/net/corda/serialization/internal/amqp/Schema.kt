@@ -5,12 +5,17 @@ import net.corda.core.internal.uncheckedCast
 import net.corda.serialization.internal.CordaSerializationMagic
 import net.corda.serialization.internal.amqp.AMQPTypeIdentifiers.isPrimitive
 import net.corda.serialization.internal.model.TypeIdentifier
-import net.corda.serialization.internal.model.TypeIdentifier.TopType
 import net.corda.serialization.internal.model.TypeIdentifier.Companion.forGenericType
-import org.apache.qpid.proton.amqp.*
+import net.corda.serialization.internal.model.TypeIdentifier.TopType
+import org.apache.qpid.proton.amqp.Binary
+import org.apache.qpid.proton.amqp.DescribedType
+import org.apache.qpid.proton.amqp.Symbol
+import org.apache.qpid.proton.amqp.UnsignedInteger
+import org.apache.qpid.proton.amqp.UnsignedLong
 import org.apache.qpid.proton.codec.DescribedTypeConstructor
 import java.io.NotSerializableException
 import java.lang.reflect.Type
+import java.security.MessageDigest
 
 const val DESCRIPTOR_DOMAIN: String = "net.corda"
 val amqpMagic = CordaSerializationMagic("corda".toByteArray() + byteArrayOf(1, 0))
@@ -36,8 +41,8 @@ fun redescribe(obj: Any?, type: Type): Any? {
 }
 
 private class RedescribedType(
-    private val descriptor: Symbol,
-    private val described: Any?
+        private val descriptor: Symbol,
+        private val described: Any?
 ) : DescribedType {
     override fun getDescriptor(): Symbol = descriptor
     override fun getDescribed(): Any? = described
@@ -183,6 +188,16 @@ sealed class TypeNotation : DescribedType {
     abstract val label: String?
     abstract val provides: List<String>
     abstract val descriptor: Descriptor
+
+    val id: ByteArray by lazy {
+        // assumed that toString holds a complete representation of TypeNotation
+        hashString(toString())
+    }
+}
+
+private fun hashString(input: String): ByteArray {
+    val md = MessageDigest.getInstance("SHA-256")
+    return md.digest(input.toByteArray())
 }
 
 @KeepForDJVM

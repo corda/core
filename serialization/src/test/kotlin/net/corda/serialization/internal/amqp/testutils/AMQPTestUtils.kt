@@ -77,7 +77,7 @@ class TestSerializationOutput(
     @Throws(NotSerializableException::class)
     fun <T : Any> serialize(obj: T): SerializedBytes<T> {
         try {
-            return _serialize(obj, testSerializationContext)
+            return serializeInternal(obj, testSerializationContext)
         } finally {
             andFinally()
         }
@@ -139,7 +139,7 @@ fun <T : Any> SerializationOutput.serializeAndReturnSchema(
 @Throws(NotSerializableException::class)
 fun <T : Any> SerializationOutput.serialize(obj: T, encoding: SerializationEncoding? = null): SerializedBytes<T> {
     try {
-        return _serialize(obj, testSerializationContext.withEncoding(encoding))
+        return serializeInternal(obj, testSerializationContext.withEncoding(encoding))
     } finally {
         andFinally()
     }

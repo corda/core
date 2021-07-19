@@ -5,11 +5,23 @@ import net.corda.core.KeepForDJVM
 import net.corda.core.crypto.SecureHash
 import net.corda.core.internal.VisibleForTesting
 import net.corda.core.internal.copyBytes
-import net.corda.core.serialization.*
+import net.corda.core.serialization.ClassWhitelist
+import net.corda.core.serialization.EncodingWhitelist
+import net.corda.core.serialization.ObjectWithCompatibleContext
+import net.corda.core.serialization.SerializationContext
+import net.corda.core.serialization.SerializationCustomSerializer
+import net.corda.core.serialization.SerializationEncoding
+import net.corda.core.serialization.SerializationFactory
+import net.corda.core.serialization.SerializationMagic
+import net.corda.core.serialization.SerializedBytes
 import net.corda.core.utilities.ByteSequence
+import net.corda.serialization.internal.amqp.Schema
 import net.corda.serialization.internal.amqp.amqpMagic
+import org.apache.qpid.proton.amqp.Binary
+import org.apache.qpid.proton.codec.Data
 import org.slf4j.LoggerFactory
 import java.io.NotSerializableException
+import java.security.MessageDigest
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
@@ -30,6 +42,31 @@ data class SerializationContextImpl @JvmOverloads constructor(override val prefe
                                                               override val carpenterDisabled: Boolean = false,
                                                               override val preventDataLoss: Boolean = false,
                                                               override val customSerializers: Set<SerializationCustomSerializer<*, *>> = emptySet()) : SerializationContext {
+
+    private val schemaCache = ConcurrentHashMap<String, Binary>()
+
+    private fun schemaCacheId(schema: Schema): String {
+        var md = MessageDigest.getInstance("SHA-256")
+        for(type in schema.types){
+            md.update(type.id)
+        }
+        return String(md.digest())
+    }
+
+    fun serializeSchema(schema: Schema): Binary {
+        var cacheId = schemaCacheId(schema)
+        var schemaBytes = schemaCache[cacheId]
+        return if(schemaBytes == null) {
+            val data = Data.Factory.create()
+            data.putObject(schema)
+            schemaBytes = data.encode()
+            schemaCache[cacheId] = schemaBytes
+            schemaBytes
+        }else{
+            schemaBytes
+        }
+    }
+
     /**
      * {@inheritDoc}
      */
