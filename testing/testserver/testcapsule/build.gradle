@@ -67,9 +67,7 @@ task buildWebserverJar(type: FatCapsule, dependsOn: project(':node').tasks.jar) 
 artifacts {
     archives buildWebserverJar
     runtimeArtifacts buildWebserverJar
-    publish buildWebserverJar {
-        classifier ''
-    }
+    publish buildWebserverJar
 }
 
 publish {

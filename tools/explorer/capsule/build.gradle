@@ -44,9 +44,7 @@ task buildExplorerJAR(type: FatCapsule, dependsOn: project(':tools:explorer').ta
 artifacts {
     archives buildExplorerJAR
     runtimeArtifacts buildExplorerJAR
-    publish buildExplorerJAR {
-        classifier ""
-    }
+    publish buildExplorerJAR
 }
 
 jar {
