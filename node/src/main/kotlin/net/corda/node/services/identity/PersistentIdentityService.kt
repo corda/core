@@ -262,12 +262,12 @@ class PersistentIdentityService(cacheFactory: NamedCacheFactory) : SingletonSeri
     @Throws(CertificateExpiredException::class, CertificateNotYetValidException::class, InvalidAlgorithmParameterException::class)
     private fun verifyAndRegisterIdentity(trustAnchor: TrustAnchor, identity: PartyAndCertificate, isNewRandomIdentity: Boolean = false):
             PartyAndCertificate? {
-            // Validate the chain first, before we do anything clever with it
+        // Validate the chain first, before we do anything clever with it
         val identityCertChain = identity.certPath.x509Certificates
         try {
             identity.verify(trustAnchor)
         } catch (e: CertPathValidatorException) {
-        log.warn("Certificate validation failed for ${identity.name} against trusted root ${trustAnchor.trustedCert.subjectX500Principal}.")
+            log.warn("Certificate validation failed for ${identity.name} against trusted root ${trustAnchor.trustedCert.subjectX500Principal}.")
             log.warn("Certificate path :")
             identityCertChain.reversed().forEachIndexed { index, certificate ->
                 val space = (0 until index).joinToString("") { "   " }
@@ -331,6 +331,7 @@ class PersistentIdentityService(cacheFactory: NamedCacheFactory) : SingletonSeri
             keyToPartyAndCert.allPersisted.use { it.map { it.second }.toList() }
         }
     }
+
     override fun wellKnownPartyFromX500Name(name: CordaX500Name): Party? = database.transaction {
         certificateFromCordaX500Name(name)?.party
     }
@@ -374,8 +375,9 @@ class PersistentIdentityService(cacheFactory: NamedCacheFactory) : SingletonSeri
     }
 
     @Throws(UnknownAnonymousPartyException::class)
-    override fun assertOwnership(party: Party, anonymousParty: AnonymousParty) = database.transaction { super.assertOwnership(party,
-            anonymousParty) }
+    override fun assertOwnership(party: Party, anonymousParty: AnonymousParty) = database.transaction {
+        super.assertOwnership(party, anonymousParty)
+    }
 
     lateinit var ourNames: Set<CordaX500Name>
 
@@ -399,14 +401,23 @@ class PersistentIdentityService(cacheFactory: NamedCacheFactory) : SingletonSeri
                 // KeyManagementService.freshKey.
                 registerKeyToParty(publicKey, party)
                 hashToKey[publicKeyHash] = publicKey
-                if (externalId != null) {
-                    registerKeyToExternalId(publicKey, externalId)
-                }
             } else {
                 log.info("An existing entry for $publicKeyHash already exists.")
                 if (party.name != existingEntryForKey) {
                     throw IllegalStateException("The public publicKey $publicKeyHash is already assigned to a different party than the " +
                             "supplied party.")
+                }
+            }
+            if (externalId != null) {
+                val existingExtId = externalIdForPublicKey(publicKey)
+                if (existingExtId == null) {
+                    registerKeyToExternalId(publicKey, externalId)
+                } else {
+                    log.info("An existing external id for $publicKeyHash already exists.")
+                    if (existingExtId != externalId) {
+                        throw IllegalStateException("The public publicKey $publicKeyHash is already assigned to a different UUID than " +
+                                "supplied UUID.")
+                    }
                 }
             }
         }

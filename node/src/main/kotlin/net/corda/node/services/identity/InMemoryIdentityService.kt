@@ -49,9 +49,8 @@ class InMemoryIdentityService(
     init {
         keyToPartyAndCerts.putAll(identities.associateBy { it.owningKey })
         nameToKey.putAll(identities.associateBy { it.name }.mapValues { it.value.owningKey })
-        keyToName.putAll(identities.associateBy{ it.owningKey.toStringShort() }.mapValues { it.value.party.name })
+        keyToName.putAll(identities.associateBy { it.owningKey.toStringShort() }.mapValues { it.value.party.name })
     }
-
 
     @Throws(CertificateExpiredException::class, CertificateNotYetValidException::class, InvalidAlgorithmParameterException::class)
     override fun verifyAndRegisterIdentity(identity: PartyAndCertificate): PartyAndCertificate? {
@@ -93,7 +92,7 @@ class InMemoryIdentityService(
         log.trace { "Registering identity $identity isNewRandomIdentity=${isNewRandomIdentity}" }
         keyToPartyAndCerts[identity.owningKey] = identity
         // Always keep the first party we registered, as that's the well known identity
-        nameToKey.computeIfAbsent(identity.name) {identity.owningKey}
+        nameToKey.computeIfAbsent(identity.name) { identity.owningKey }
         keyToName.putIfAbsent(identity.owningKey.toStringShort(), identity.name)
         return keyToPartyAndCerts[identityCertChain[1].publicKey]
     }
@@ -119,7 +118,8 @@ class InMemoryIdentityService(
         val results = LinkedHashSet<Party>()
         nameToKey.forEach { (x500name, key) ->
             if (x500Matches(query, exactMatch, x500name)) {
-                results += keyToPartyAndCerts[key]?.party ?: throw IllegalArgumentException("Could not find an entry in the database for the public key $key.")
+                results += keyToPartyAndCerts[key]?.party
+                        ?: throw IllegalArgumentException("Could not find an entry in the database for the public key $key.")
             }
         }
         return results
@@ -131,11 +131,11 @@ class InMemoryIdentityService(
         if (existingEntry == null) {
             registerKeyToParty(publicKey, party)
             hashToKey[publicKeyHash] = publicKey
-            if (externalId != null) {
+        }
+        if (externalId != null) {
+            val existingExtId = keyToExternalId[publicKeyHash]
+            if (existingExtId == null) {
                 registerKeyToExternalId(publicKey, externalId)
-            }
-        } else {
-            if (party.name != existingEntry) {
             }
         }
     }

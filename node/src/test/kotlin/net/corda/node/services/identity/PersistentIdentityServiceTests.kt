@@ -30,8 +30,10 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.jupiter.api.assertDoesNotThrow
+import java.util.*
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 
 class PersistentIdentityServiceTests {
@@ -145,6 +147,48 @@ class PersistentIdentityServiceTests {
         identities.forEach {
             assertEquals(it.party, identityService.wellKnownPartyFromX500Name(it.name))
         }
+    }
+
+    @Test(timeout=300_000)
+    fun `get identity by external id with registration straight away`() {
+        val newPair = Crypto.generateKeyPair()
+        val extId = UUID.randomUUID()
+        assertNull(identityService.externalIdForPublicKey(newPair.public))
+        identityService.verifyAndRegisterIdentity(ALICE_IDENTITY)
+        assertFalse(identityService.publicKeysForExternalId(extId).iterator().hasNext())
+
+        identityService.registerKey(newPair.public, ALICE, extId)
+        assertEquals(extId, identityService.externalIdForPublicKey(newPair.public))
+        assertEquals(1, identityService.publicKeysForExternalId(extId).iterator().asSequence().toList().size)
+        assertEquals(newPair.public, identityService.publicKeysForExternalId(extId).iterator().next())
+
+        identityService.registerKey(newPair.public, ALICE, null)
+        assertEquals(extId, identityService.externalIdForPublicKey(newPair.public))
+        assertEquals(1, identityService.publicKeysForExternalId(extId).iterator().asSequence().toList().size)
+        assertEquals(newPair.public, identityService.publicKeysForExternalId(extId).iterator().next())
+    }
+
+    @Test(timeout=300_000)
+    fun `get identity by external id with registration on second call`() {
+        val newPair = Crypto.generateKeyPair()
+        val extId = UUID.randomUUID()
+        assertNull(identityService.externalIdForPublicKey(newPair.public))
+        identityService.verifyAndRegisterIdentity(ALICE_IDENTITY)
+        assertFalse(identityService.publicKeysForExternalId(extId).iterator().hasNext())
+
+        identityService.registerKey(newPair.public, ALICE, null)
+        assertNull(identityService.externalIdForPublicKey(newPair.public))
+        assertFalse(identityService.publicKeysForExternalId(extId).iterator().hasNext())
+
+        identityService.registerKey(newPair.public, ALICE, extId)
+        assertEquals(extId, identityService.externalIdForPublicKey(newPair.public))
+        assertEquals(1, identityService.publicKeysForExternalId(extId).iterator().asSequence().toList().size)
+        assertEquals(newPair.public, identityService.publicKeysForExternalId(extId).iterator().next())
+
+        identityService.registerKey(newPair.public, ALICE, null)
+        assertEquals(extId, identityService.externalIdForPublicKey(newPair.public))
+        assertEquals(1, identityService.publicKeysForExternalId(extId).iterator().asSequence().toList().size)
+        assertEquals(newPair.public, identityService.publicKeysForExternalId(extId).iterator().next())
     }
 
     /**

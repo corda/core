@@ -15,6 +15,7 @@ import net.corda.coretesting.internal.DEV_INTERMEDIATE_CA
 import net.corda.coretesting.internal.DEV_ROOT_CA
 import org.junit.Rule
 import org.junit.Test
+import java.util.*
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
@@ -92,6 +93,40 @@ class InMemoryIdentityServiceTests {
         assertNull(service.wellKnownPartyFromX500Name(identities.first().name))
         identities.forEach { service.verifyAndRegisterIdentity(it) }
         identities.forEach { assertEquals(it.party, service.wellKnownPartyFromX500Name(it.name)) }
+    }
+
+    @Test(timeout = 300_000)
+    fun `get identity by external id with registration straight away`() {
+        val service = createService()
+        val newPair = Crypto.generateKeyPair()
+        val extId = UUID.randomUUID()
+        assertNull(service.externalIdForPublicKey(newPair.public))
+        service.verifyAndRegisterIdentity(ALICE_IDENTITY)
+
+        service.registerKey(newPair.public, ALICE, extId)
+        assertEquals(extId, service.externalIdForPublicKey(newPair.public))
+
+        service.registerKey(newPair.public, ALICE, null)
+        assertEquals(extId, service.externalIdForPublicKey(newPair.public))
+    }
+
+    @Test(timeout = 300_000)
+    fun `get identity by external id with registration on second call`() {
+        val service = createService()
+        val newPair = Crypto.generateKeyPair()
+        val extId = UUID.randomUUID()
+        assertNull(service.externalIdForPublicKey(newPair.public))
+        service.verifyAndRegisterIdentity(ALICE_IDENTITY)
+        assertNull(service.externalIdForPublicKey(newPair.public))
+
+        service.registerKey(newPair.public, ALICE, null)
+        assertNull(service.externalIdForPublicKey(newPair.public))
+
+        service.registerKey(newPair.public, ALICE, extId)
+        assertEquals(extId, service.externalIdForPublicKey(newPair.public))
+
+        service.registerKey(newPair.public, ALICE, null)
+        assertEquals(extId, service.externalIdForPublicKey(newPair.public))
     }
 
     /**
