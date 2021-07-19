@@ -118,6 +118,42 @@ class Vault<out T : ContractState>(val states: Iterable<StateAndRef<T>>) {
             return Update(consumed, produced, flowId, type, references)
         }
 
+        companion object{
+
+            /**
+             * Combine multiple updates into a single update with the combined inputs and outputs of the updates but net
+             * any outputs of the left-hand-side (this) that are consumed by the inputs of the right-hand-side (rhs).
+             *
+             * i.e. the net effect in terms of state live-ness of receiving the combined updates is the same as receiving them sequentially.
+             *
+             * merge complements the plus operator to efficiently combine large set of updates.
+             */
+            fun merge(updates: List<Vault.Update<ContractState>>): Vault.Update<ContractState> {
+                if(updates.isEmpty()) throw IllegalStateException("cannot be empty")
+                var updateType = updates[0].type
+
+                var combinedConsumed = HashSet<StateAndRef<ContractState>>()
+                var combinedProduced = HashSet<StateAndRef<ContractState>>()
+                var combinedReferenced = HashSet<StateAndRef<ContractState>>()
+
+                for(update in updates){
+                    require(update.type == updateType) { "Cannot combine updates of different types" }
+
+                    update.consumed.filter { !combinedProduced.contains(it) }.forEach { combinedConsumed.add(it) }
+
+                    // The ordering below matters to preserve ordering of consumed/produced Sets when they are insertion
+                    // order dependent implementations.
+                    combinedProduced.removeAll(update.consumed)
+                    combinedProduced.addAll(update.produced)
+
+                    combinedReferenced.addAll(update.references)
+                }
+
+                return Vault.Update(consumed = combinedConsumed, produced = combinedProduced,
+                        references = combinedReferenced, type = updateType)
+            }
+        }
+
     }
 
     @CordaSerializable

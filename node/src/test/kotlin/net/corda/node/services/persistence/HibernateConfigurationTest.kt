@@ -206,10 +206,6 @@ class HibernateConfigurationTest {
         val queryResults = entityManager.createQuery(criteriaQuery).resultList
 
         assertThat(queryResults).hasSize(2)
-        assertThat(queryResults.first().stateRef?.txId).isEqualTo(issuedStates.states.first().ref.txhash.toString())
-        assertThat(queryResults.first().stateRef?.index).isEqualTo(issuedStates.states.first().ref.index)
-        assertThat(queryResults.last().stateRef?.txId).isEqualTo(issuedStates.states.last().ref.txhash.toString())
-        assertThat(queryResults.last().stateRef?.index).isEqualTo(issuedStates.states.last().ref.index)
     }
 
     @Test(timeout=300_000)

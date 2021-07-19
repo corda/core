@@ -9,8 +9,13 @@ import net.corda.core.internal.VisibleForTesting
 import net.corda.core.internal.bufferUntilSubscribed
 import net.corda.core.internal.concurrent.doneFuture
 import net.corda.core.messaging.DataFeed
-import net.corda.core.serialization.*
+import net.corda.core.serialization.SerializationContext
+import net.corda.core.serialization.SerializationDefaults
+import net.corda.core.serialization.SerializedBytes
+import net.corda.core.serialization.SingletonSerializeAsToken
+import net.corda.core.serialization.deserialize
 import net.corda.core.serialization.internal.effectiveSerializationEnv
+import net.corda.core.serialization.serialize
 import net.corda.core.toFuture
 import net.corda.core.transactions.CoreTransaction
 import net.corda.core.transactions.SignedTransaction
@@ -21,13 +26,24 @@ import net.corda.node.services.api.WritableTransactionStorage
 import net.corda.node.services.statemachine.FlowStateMachineImpl
 import net.corda.node.utilities.AppendOnlyPersistentMapBase
 import net.corda.node.utilities.WeightBasedAppendOnlyPersistentMap
-import net.corda.nodeapi.internal.persistence.*
+import net.corda.nodeapi.internal.persistence.CordaPersistence
+import net.corda.nodeapi.internal.persistence.NODE_DATABASE_PREFIX
+import net.corda.nodeapi.internal.persistence.bufferUntilDatabaseCommit
+import net.corda.nodeapi.internal.persistence.currentDBSession
+import net.corda.nodeapi.internal.persistence.wrapWithDatabaseTransaction
 import net.corda.serialization.internal.CordaSerializationEncoding.SNAPPY
 import rx.Observable
 import rx.subjects.PublishSubject
 import java.time.Instant
 import java.util.*
-import javax.persistence.*
+import javax.persistence.AttributeConverter
+import javax.persistence.Column
+import javax.persistence.Convert
+import javax.persistence.Converter
+import javax.persistence.Entity
+import javax.persistence.Id
+import javax.persistence.Lob
+import javax.persistence.Table
 import kotlin.streams.toList
 
 class DBTransactionStorage(private val database: CordaPersistence, cacheFactory: NamedCacheFactory,
@@ -165,6 +181,8 @@ class DBTransactionStorage(private val database: CordaPersistence, cacheFactory:
     }
 
     override fun addTransaction(transaction: SignedTransaction): Boolean {
+        return addTransactions(listOf(transaction)).second.isEmpty()
+/*
         return database.transaction {
             txStorage.locked {
                 val cachedValue = TxCacheValue(transaction, TransactionStatus.VERIFIED)
@@ -176,6 +194,33 @@ class DBTransactionStorage(private val database: CordaPersistence, cacheFactory:
                     logger.debug { "Transaction ${transaction.id} is already recorded as verified, so no need to re-record" }
                     false
                 }
+            }
+        }*/
+    }
+
+    override fun addTransactions(transactions: Iterable<SignedTransaction>): Pair<List<SignedTransaction>, List<SignedTransaction>> {
+        return database.transaction {
+            txStorage.locked {
+                val cachedValues = transactions.map{it.id to TxCacheValue(it, TransactionStatus.VERIFIED)}.toMap()
+
+                val addedOrUpdated = addOrUpdateAll(cachedValues) { k, _, prefetched ->
+                    if(!prefetched.isPresent || prefetched.get().status == TransactionStatus.VERIFIED){
+                        // nothing to update, either does not yet exist or already verified
+                        false
+                    }else {
+                        updateTransaction(k)
+                    }
+                }
+
+                val partition = transactions.partition{ addedOrUpdated.contains(it.id) }
+                for(transaction in partition.first){
+                    logger.debug { "Transaction ${transaction.id} has been recorded as verified" }
+                    onNewTx(transaction)
+                }
+                for(transaction in partition.second){
+                    logger.debug { "Transaction ${transaction.id} is already recorded as verified, so no need to re-record" }
+                }
+                partition
             }
         }
     }

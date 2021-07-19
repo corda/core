@@ -397,7 +397,9 @@ class NodeVaultService(
 
     private fun processAndNotify(updates: List<Vault.Update<ContractState>>) {
         if (updates.isEmpty()) return
-        val netUpdate = updates.reduce { update1, update2 -> update1 + update2 }
+
+     //   val netUpdate = updates.reduce { update1, update2 -> update1 + update2 }
+        val netUpdate = Vault.Update.merge(updates)
         if (!netUpdate.isEmpty()) {
             recordUpdate(netUpdate)
             mutex.locked {

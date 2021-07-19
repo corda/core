@@ -5,8 +5,13 @@ import net.corda.core.context.InvocationContext
 import net.corda.core.crypto.SecureHash
 import net.corda.core.flows.FlowLogic
 import net.corda.core.flows.StateMachineRunId
-import net.corda.core.internal.*
+import net.corda.core.internal.FlowStateMachine
+import net.corda.core.internal.NamedCacheFactory
+import net.corda.core.internal.ResolveTransactionsFlow
+import net.corda.core.internal.ServiceHubCoreInternal
+import net.corda.core.internal.TransactionsResolver
 import net.corda.core.internal.concurrent.OpenFuture
+import net.corda.core.internal.dependencies
 import net.corda.core.messaging.DataFeed
 import net.corda.core.messaging.StateMachineTransactionMapping
 import net.corda.core.node.NodeInfo
@@ -79,10 +84,13 @@ interface ServiceHubInternal : ServiceHubCoreInternal {
                 // for transactions being recorded at ONLY_RELEVANT, if this transaction has been seen before its outputs should already
                 // have been recorded at ONLY_RELEVANT, so there shouldn't be anything to re-record here.
                 val (recordedTransactions, previouslySeenTxs) = if (statesToRecord != StatesToRecord.ALL_VISIBLE) {
-                    orderedTxs.filter(validatedTransactions::addTransaction) to emptyList()
+                    // orderedTxs.filter(validatedTransactions::addTransaction) to emptyList()
+                    validatedTransactions.addTransactions(orderedTxs).first to emptyList()
                 } else {
-                    orderedTxs.partition(validatedTransactions::addTransaction)
+                    // orderedTxs.partition(validatedTransactions::addTransaction)
+                    validatedTransactions.addTransactions(orderedTxs)
                 }
+
                 val stateMachineRunId = FlowStateMachineImpl.currentStateMachine()?.id
                 if (stateMachineRunId != null) {
                     recordedTransactions.forEach {
@@ -250,6 +258,17 @@ interface WritableTransactionStorage : TransactionStorage {
      */
     // TODO: Throw an exception if trying to add a transaction with fewer signatures than an existing entry.
     fun addTransaction(transaction: SignedTransaction): Boolean
+
+    /**
+     * Add a collection of new *verified* transactions to the store, or convert the existing unverified transactions into a verified ones.
+     * This method is optional to implement and by default transactions will be added individually.
+     *
+     * @param transactions The transactions to be recorded.
+     * @return pair of collections holding transactions recorded as *new verified* transactions and already existing transactions
+     */
+    fun addTransactions(transactions: Iterable<SignedTransaction>): Pair<List<SignedTransaction>, List<SignedTransaction>> {
+        return transactions.partition { addTransaction(it) }
+    }
 
     /**
      * Add a new *unverified* transaction to the store.
