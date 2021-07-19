@@ -1,6 +1,5 @@
 package net.corda.node.services.statemachine
 
-import net.corda.core.crypto.SecureHash
 import net.corda.core.flows.Destination
 import net.corda.core.flows.StateMachineRunId
 import net.corda.core.identity.Party
@@ -13,11 +12,6 @@ import java.util.*
  * [Action]s are reified IO actions to execute as part of state machine transitions.
  */
 sealed class Action {
-
-    /**
-     * Track a transaction hash and notify the state machine once the corresponding transaction has committed.
-     */
-    data class TrackTransaction(val hash: SecureHash, val currentState: StateMachineState) : Action()
 
     /**
      * Send an initial session message to [destination].

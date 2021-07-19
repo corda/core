@@ -1,6 +1,7 @@
 package net.corda.node.services.statemachine
 
 import co.paralleluniverse.fibers.Suspendable
+import net.corda.core.crypto.SecureHash
 import net.corda.core.flows.FlowExternalAsyncOperation
 import net.corda.core.flows.FlowExternalOperation
 import net.corda.core.flows.FlowInfo
@@ -11,6 +12,7 @@ import net.corda.core.identity.CordaX500Name
 import net.corda.core.identity.Party
 import net.corda.core.messaging.MessageRecipients
 import net.corda.core.serialization.deserialize
+import net.corda.core.transactions.SignedTransaction
 import net.corda.core.utilities.contextLogger
 import net.corda.core.utilities.seconds
 import net.corda.node.services.messaging.Message
@@ -52,6 +54,7 @@ class FlowOperatorTests {
     lateinit var daveParty: Party
     private lateinit var eugeneNode: TestStartedNode
     private lateinit var eugeneParty: Party
+    private lateinit var notaryParty: Party
 
     @Before
     fun setup() {
@@ -80,6 +83,7 @@ class FlowOperatorTests {
         charlieParty = charlieNode.info.legalIdentities.first()
         daveParty = daveNode.info.legalIdentities.first()
         eugeneParty = eugeneNode.info.legalIdentities.first()
+        notaryParty = mockNet.defaultNotaryIdentity
 
         // put nodes offline, alice and charlie are staying online
         bobNode.dispose()
@@ -456,6 +460,22 @@ class FlowOperatorTests {
         }
     }
 
+    @Test(timeout = 300_000)
+    fun `query should return flow which is waiting for ledger commit as an async external operation` () {
+        val txId = SecureHash.randomSHA256()
+        aliceNode.services.startFlow(WaitForLedgerCommitFlow(txId))
+
+        val flowOperator = FlowOperator(aliceNode.internals.smm, aliceNode.services.clock)
+
+        executeTest(5.seconds) {
+            val suspendedFlows = flowOperator.getAllWaitingFlows().toList()
+            assertEquals(1, suspendedFlows.size)
+            val waitingFlowInfo = flowOperator.queryWaitingFlows(WaitingFlowQuery()).single()
+            assertEquals(WaitingSource.EXTERNAL_OPERATION, waitingFlowInfo.source)
+            assertEquals("net.corda.core.internal.WaitForLedgerCommit", waitingFlowInfo.externalOperationImplName)
+        }
+    }
+
     @InitiatingFlow
     class ReceiveFlow(private val payload: String, private val otherParties: List<Party>) : FlowLogic<Unit>() {
         init {
@@ -572,6 +592,14 @@ class FlowOperatorTests {
             }
 
             otherPartySession.send(payload)
+        }
+    }
+
+    @InitiatingFlow
+    class WaitForLedgerCommitFlow(private val txId: SecureHash) : FlowLogic<SignedTransaction>() {
+        @Suspendable
+        override fun call(): SignedTransaction {
+            return waitForLedgerCommit(txId)
         }
     }
 

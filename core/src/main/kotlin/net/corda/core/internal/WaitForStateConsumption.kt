@@ -1,5 +1,6 @@
 package net.corda.core.internal
 
+import net.corda.core.DeleteForDJVM
 import net.corda.core.concurrent.CordaFuture
 import net.corda.core.contracts.StateRef
 import net.corda.core.internal.concurrent.asCordaFuture
@@ -16,6 +17,7 @@ import java.util.concurrent.CompletableFuture
  * @property stateRefs the StateRefs which will be updated.
  * @property services a ServiceHub instance
  */
+@DeleteForDJVM
 class WaitForStateConsumption(val stateRefs: Set<StateRef>, val services: ServiceHub) : FlowAsyncOperation<Unit> {
 
     companion object {

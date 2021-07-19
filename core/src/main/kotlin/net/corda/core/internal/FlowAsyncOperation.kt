@@ -13,6 +13,10 @@ import net.corda.core.serialization.CordaSerializable
  */
 @CordaSerializable
 interface FlowAsyncOperation<R : Any> {
+
+    val collectErrorsFromSessions: Boolean
+        get() = false
+
     /**
      * Performs the operation in a non-blocking fashion.
      * @param deduplicationId  If the flow restarts from a checkpoint (due to node restart, or via a visit to the flow
@@ -35,12 +39,12 @@ fun <T, R : Any> FlowLogic<T>.executeAsync(operation: FlowAsyncOperation<R>, may
 }
 
 /**
- * Returns a name of the external operation implementation considering that it can wrapped
- * by WrappedFlowExternalAsyncOperation<T> or WrappedFlowExternalOperation<T>
+ * Unwraps an external operation implementation that can be wrapped by [WrappedFlowExternalAsyncOperation] or
+ * [WrappedFlowExternalOperation].
  */
-val FlowAsyncOperation<*>.externalOperationImplName: String
-    get() = when (this) {
-        is WrappedFlowExternalAsyncOperation<*> -> operation.javaClass.canonicalName
-        is WrappedFlowExternalOperation<*> -> operation.javaClass.canonicalName
-        else -> javaClass.canonicalName
-    }
+fun FlowAsyncOperation<*>.unwrap(): Any =
+    when (this) {
+        is WrappedFlowExternalAsyncOperation<*> -> operation
+        is WrappedFlowExternalOperation<*> -> operation
+        else -> this
+}

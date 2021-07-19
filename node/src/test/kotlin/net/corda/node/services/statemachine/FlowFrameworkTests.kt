@@ -12,6 +12,8 @@ import net.corda.core.crypto.random63BitValue
 import net.corda.core.flows.Destination
 import net.corda.core.flows.FinalityFlow
 import net.corda.core.flows.FlowException
+import net.corda.core.flows.FlowExternalAsyncOperation
+import net.corda.core.flows.FlowExternalOperation
 import net.corda.core.flows.FlowInfo
 import net.corda.core.flows.FlowLogic
 import net.corda.core.flows.FlowSession
@@ -86,12 +88,14 @@ import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.UUID
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeoutException
 import java.util.function.Predicate
 import kotlin.concurrent.thread
 import kotlin.reflect.KClass
 import kotlin.streams.toList
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class FlowFrameworkTests {
@@ -152,6 +156,8 @@ class FlowFrameworkTests {
         SuspendingFlow.hookAfterCheckpoint = {}
         StaffedFlowHospital.onFlowResuscitated.clear()
         StaffedFlowHospital.onFlowKeptForOvernightObservation.clear()
+        WaitForLedgerCommitFlow.preWaitForLedgerCommitHook = null
+        WaitForLedgerCommitFlow.postWaitForLedgerCommitHook = null
     }
 
     @Test(timeout=300_000)
@@ -895,6 +901,69 @@ class FlowFrameworkTests {
         assertEquals(Checkpoint.FlowStatus.RUNNABLE, checkpointStatusAfterRestart)
         assertEquals(0, dbExceptionAfterRestart!!.size)
     }
+
+    @Test(timeout=300_000)
+    fun `flows waiting on ExecuteAsyncOperation persist flow async operations additional info`() {
+        val txHash = SecureHash.randomSHA256()
+        val flowHandle1 = aliceNode.services.startFlow(WaitForLedgerCommitFlow(txHash))
+        val flowHandle2 = aliceNode.services.startFlow(ExternalOperationFlow(async = false))
+        val flowHandle3 = aliceNode.services.startFlow(ExternalOperationFlow(async = true))
+
+        Thread.sleep(2000) // wait until all flows have suspended on their [FlowIORequest.ExecuteAsyncOperation]s
+
+        aliceNode.database.transaction {
+            val checkpoint1 = aliceNode.internals.checkpointStorage.getCheckpoint(flowHandle1.id)
+            val checkpoint2 = aliceNode.internals.checkpointStorage.getCheckpoint(flowHandle2.id)
+            val checkpoint3 = aliceNode.internals.checkpointStorage.getCheckpoint(flowHandle3.id)
+            assertEquals(
+                "ExecuteAsyncOperation(WaitForLedgerCommit(hash=$txHash))",
+                checkpoint1!!.flowIoRequest
+            )
+            assertEquals("ExecuteAsyncOperation(external operation)", checkpoint2!!.flowIoRequest)
+            assertEquals("ExecuteAsyncOperation(external async operation)", checkpoint3!!.flowIoRequest)
+        }
+    }
+
+    @Test(timeout=300_000)
+    fun `event AsyncOperationCompletion after event Error will not resume the flow`() {
+        val ptx = TransactionBuilder(notary = notaryIdentity)
+                .addOutputState(DummyState(), DummyContract.PROGRAM_ID)
+                .addCommand(dummyCommand(alice.owningKey))
+        val stx = aliceNode.services.signInitialTransaction(ptx)
+
+        val fiberFuture = CompletableFuture<FlowStateMachineImpl<*>>()
+        WaitForLedgerCommitFlow.preWaitForLedgerCommitHook = {
+            fiberFuture.complete(it)
+        }
+
+        var codeRun = false
+        WaitForLedgerCommitFlow.postWaitForLedgerCommitHook = {
+            // the code in this lambda should never be executed as the flow suspended on a [WaitForLedgerCommit]
+            // will identify that has previously errored and will keep processing events instead of executing
+            // a [TopLevelTransition.asyncOperationCompletionTransition].
+            codeRun = true
+        }
+
+        val flowHandle = aliceNode.services.startFlow(WaitForLedgerCommitFlow(stx.id))
+
+        val fiber = fiberFuture.get()
+        Thread.sleep(2000) // wait until fiber suspends on 'WaitForLedgerCommit'
+        // manually inject a [Event.Error] and then a [Event.AsyncOperationCompletion] to impersonate the case in which
+        // a flow is waiting for ledger commit for transaction X, and then the following series of events occurs:
+        // 1. an error message arrives from a counter party session
+        // 2. the statemachine is waiting on a [FlowIORequest.ExecuteAsyncOperation.operation] and operation is [WaitForLedgerCommit].
+        // 3. the statemachine collect and throws the error, then an [Event.Error] is created and pushed into the fiber's queue, so at this time the queue only has the [Event.Error].
+        // 4. transaction X gets commited and the [DBTransactionStorage.updatesPublisher] pushes the event, which calls the callback registered by the flow, which in turn then registers a [Event.AsyncOperationCompletion],
+        //      now the fibers queue may be in either of the following states: [[Event.Error], [Event.AsyncOperationCompletion]] or [[Event.AsyncOperationCompletion]].
+        // 5. in this case the flow should error and NOT resume with the result contained in [Event.AsyncOperationCompletion.returnValue]
+        fiber.scheduleEvent(Event.Error(IllegalStateException("counter party exception")))
+        fiber.scheduleEvent(Event.AsyncOperationCompletion(stx))
+
+        assertFailsWith<IllegalStateException> {
+            flowHandle.resultFuture.getOrThrow()
+        }
+        assertFalse(codeRun)
+    }
         //region Helpers
 
     private val normalEnd = ExistingSessionMessage(SessionId(0), EndSessionMessage) // NormalSessionEnd(0)
@@ -950,12 +1019,22 @@ class FlowFrameworkTests {
 
     @InitiatingFlow
     class WaitForLedgerCommitFlow(private val txId: SecureHash, private val party: Party? = null) : FlowLogic<SignedTransaction>() {
+
+        companion object {
+            var preWaitForLedgerCommitHook: ((FlowStateMachineImpl<*>) -> Unit)? = null
+            var postWaitForLedgerCommitHook: (() -> Unit)? = null
+        }
+
         @Suspendable
         override fun call(): SignedTransaction {
             if (party != null) {
                 initiateFlow(party).send(Unit)
             }
-            return waitForLedgerCommit(txId)
+
+            preWaitForLedgerCommitHook?.invoke(this.stateMachine as FlowStateMachineImpl<*>)
+            val stx = waitForLedgerCommit(txId)
+            postWaitForLedgerCommitHook?.invoke()
+            return stx
         }
     }
 
@@ -1268,5 +1347,32 @@ internal class SuspendingFlow : FlowLogic<Unit>() {
         stateMachine.hookBeforeCheckpoint()
         stateMachine.suspend(FlowIORequest.ForceCheckpoint, maySkipCheckpoint = false) // flow checkpoints => checkpoint is in DB
         stateMachine.hookAfterCheckpoint()
+    }
+}
+
+internal class ExternalOperation: FlowExternalOperation<Unit> {
+    override fun execute(deduplicationId: String) {
+        Thread.sleep(10000)
+    }
+    override fun toString() = "external operation"
+}
+
+internal class ExternalAsyncOperation: FlowExternalAsyncOperation<Unit> {
+    override fun execute(deduplicationId: String): CompletableFuture<Unit> {
+        Thread.sleep(10000)
+        return openFuture<Unit>().toCompletableFuture()
+    }
+    override fun toString() = "external async operation"
+}
+
+internal class ExternalOperationFlow(private val async: Boolean) : FlowLogic<Unit>() {
+
+    @Suspendable
+    override fun call() {
+        if (async) {
+            await(ExternalAsyncOperation())
+        } else {
+            await(ExternalOperation())
+        }
     }
 }

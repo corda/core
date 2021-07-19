@@ -60,6 +60,8 @@ class DBCheckpointStorage(
         private const val MAX_EXC_TYPE_LENGTH = 256
         private const val MAX_FLOW_NAME_LENGTH = 128
         private const val MAX_PROGRESS_STEP_LENGTH = 256
+        @VisibleForTesting
+        const val MAX_FLOW_IO_REQUEST_LENGTH = 128
         const val MAX_CLIENT_ID_LENGTH = 512
 
         private val RUNNABLE_CHECKPOINTS = setOf(FlowStatus.RUNNABLE, FlowStatus.HOSPITALIZED)
@@ -478,7 +480,7 @@ class DBCheckpointStorage(
             status = checkpoint.status,
             compatible = checkpoint.compatible,
             progressStep = checkpoint.progressStep?.take(MAX_PROGRESS_STEP_LENGTH),
-            ioRequestType = checkpoint.flowIoRequest,
+            ioRequestType = checkpoint.flowIoRequest?.truncate(MAX_FLOW_IO_REQUEST_LENGTH, false),
             checkpointInstant = now
         )
 

@@ -14,6 +14,7 @@ import net.corda.core.internal.FlowIORequest
 import net.corda.core.internal.FlowStateMachine
 import net.corda.core.internal.ServiceHubCoreInternal
 import net.corda.core.internal.WaitForStateConsumption
+import net.corda.core.internal.WaitForLedgerCommit
 import net.corda.core.internal.abbreviate
 import net.corda.core.internal.checkPayloadIs
 import net.corda.core.internal.uncheckedCast
@@ -501,7 +502,7 @@ abstract class FlowLogic<out T> {
     @Suspendable
     @JvmOverloads
     fun waitForLedgerCommit(hash: SecureHash, maySkipCheckpoint: Boolean = false): SignedTransaction {
-        val request = FlowIORequest.WaitForLedgerCommit(hash)
+        val request = FlowIORequest.ExecuteAsyncOperation(WaitForLedgerCommit(hash, serviceHub))
         return stateMachine.suspend(request, maySkipCheckpoint = maySkipCheckpoint)
     }
 

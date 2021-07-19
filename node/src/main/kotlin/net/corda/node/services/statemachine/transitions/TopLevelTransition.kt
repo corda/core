@@ -1,8 +1,8 @@
 package net.corda.node.services.statemachine.transitions
 
-import net.corda.core.crypto.SecureHash
 import net.corda.core.flows.InitiatingFlow
 import net.corda.core.internal.FlowIORequest
+import net.corda.core.internal.unwrap
 import net.corda.core.serialization.deserialize
 import net.corda.core.utilities.Try
 import net.corda.core.utilities.contextLogger
@@ -53,7 +53,6 @@ class TopLevelTransition(
                 is Event.DoRemainingWork -> DoRemainingWorkTransition(context, startingState).transition()
                 is Event.DeliverSessionMessage -> DeliverSessionMessageTransition(context, startingState, event).transition()
                 is Event.Error -> errorTransition(event)
-                is Event.TransactionCommitted -> transactionCommittedTransition(event)
                 is Event.SoftShutdown -> softShutdownTransition()
                 is Event.StartErrorPropagation -> startErrorPropagationTransition()
                 is Event.EnterSubFlow -> enterSubFlowTransition(event)
@@ -82,33 +81,6 @@ class TopLevelTransition(
             freshErrorTransition(event.exception, event.rollback)
             FlowContinuation.ProcessEvents
         }
-    }
-
-    private fun transactionCommittedTransition(event: Event.TransactionCommitted): TransitionResult {
-        return builder {
-            val checkpoint = currentState.checkpoint
-            if (isWaitingForLedgerCommit(currentState, checkpoint, event.transaction.id)) {
-                currentState = currentState.copy(isWaitingForFuture = false)
-                if (isErrored()) {
-                    return@builder FlowContinuation.ProcessEvents
-                }
-                resumeFlowLogic(event.transaction)
-            } else {
-                freshErrorTransition(UnexpectedEventInState())
-                FlowContinuation.ProcessEvents
-            }
-        }
-    }
-
-    private fun isWaitingForLedgerCommit(
-        currentState: StateMachineState,
-        checkpoint: Checkpoint,
-        transactionId: SecureHash
-    ): Boolean {
-        return currentState.isWaitingForFuture &&
-                checkpoint.flowState is FlowState.Started &&
-                checkpoint.flowState.flowIORequest is FlowIORequest.WaitForLedgerCommit &&
-                checkpoint.flowState.flowIORequest.hash == transactionId
     }
 
     private fun softShutdownTransition(): TransitionResult {
@@ -202,7 +174,13 @@ class TopLevelTransition(
                 copy(
                     flowState = FlowState.Started(event.ioRequest, event.fiber),
                     checkpointState = newCheckpointState,
-                    flowIoRequest = event.ioRequest::class.java.simpleName,
+                    flowIoRequest = event.ioRequest::class.java.simpleName +
+                            if (event.ioRequest is FlowIORequest.ExecuteAsyncOperation) {
+                                val operation = event.ioRequest.operation.unwrap()
+                                "($operation)"
+                            } else {
+                                ""
+                            },
                     progressStep = event.progressStep?.label
                 )
             }
@@ -324,7 +302,11 @@ class TopLevelTransition(
 
     private fun asyncOperationCompletionTransition(event: Event.AsyncOperationCompletion): TransitionResult {
         return builder {
-            resumeFlowLogic(event.returnValue)
+            if (isErrored()) {
+                FlowContinuation.ProcessEvents
+            } else {
+                resumeFlowLogic(event.returnValue)
+            }
         }
     }
 

@@ -13,6 +13,7 @@ import net.corda.core.flows.*
 import net.corda.core.identity.CordaX500Name
 import net.corda.core.identity.Party
 import net.corda.core.internal.FlowIORequest
+import net.corda.core.internal.WaitForLedgerCommit
 import net.corda.core.internal.bufferUntilSubscribed
 import net.corda.core.internal.concurrent.openFuture
 import net.corda.core.internal.notary.NotaryServiceFlow
@@ -297,7 +298,7 @@ class TimedFlowTests {
             if (requestsReceived.getAndIncrement() == 0) {
                 log.info("Ignoring")
                 // Waiting forever
-                callingFlow.stateMachine.suspend(FlowIORequest.WaitForLedgerCommit(SecureHash.randomSHA256()), false)
+                callingFlow.stateMachine.suspend(FlowIORequest.ExecuteAsyncOperation(WaitForLedgerCommit(SecureHash.randomSHA256(), services)), false)
             } else {
                 log.info("Processing")
                 return super.commitInputStates(inputs, txId, caller, requestSignature, timeWindow, references)

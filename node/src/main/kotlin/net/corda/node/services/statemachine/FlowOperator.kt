@@ -5,7 +5,7 @@ import net.corda.core.identity.CordaX500Name
 import net.corda.core.identity.Party
 import net.corda.core.internal.FlowIORequest
 import net.corda.core.internal.FlowStateMachine
-import net.corda.core.internal.externalOperationImplName
+import net.corda.core.internal.unwrap
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
@@ -48,7 +48,6 @@ enum class WaitingSource {
     RECEIVE,
     SEND_AND_RECEIVE,
     CLOSE_SESSIONS,
-    WAIT_FOR_LEDGER_COMMIT,
     GET_FLOW_INFO,
     SLEEP,
     WAIT_FOR_SESSIONS_CONFIRMATIONS,
@@ -146,7 +145,6 @@ private fun FlowStateMachineImpl<*>.waitingSource(): WaitingSource? {
             is FlowIORequest.Receive -> WaitingSource.RECEIVE
             is FlowIORequest.SendAndReceive -> WaitingSource.SEND_AND_RECEIVE
             is FlowIORequest.CloseSessions -> WaitingSource.CLOSE_SESSIONS
-            is FlowIORequest.WaitForLedgerCommit -> WaitingSource.WAIT_FOR_LEDGER_COMMIT
             is FlowIORequest.GetFlowInfo -> WaitingSource.GET_FLOW_INFO
             is FlowIORequest.Sleep -> WaitingSource.SLEEP
             is FlowIORequest.WaitForSessionConfirmations -> WaitingSource.WAIT_FOR_SESSIONS_CONFIRMATIONS
@@ -176,10 +174,6 @@ private fun FlowStateMachineImpl<*>.waitingFlowInfo(): WaitingFlowInfo? {
                     WaitingSource.CLOSE_SESSIONS,
                     request.sessions.map { it.counterparty }
             )
-            is FlowIORequest.WaitForLedgerCommit -> flowInfoOf(
-                    WaitingSource.WAIT_FOR_LEDGER_COMMIT,
-                    listOf()
-            )
             is FlowIORequest.GetFlowInfo -> flowInfoOf(
                     WaitingSource.GET_FLOW_INFO,
                     request.sessions.map { it.counterparty }
@@ -195,7 +189,7 @@ private fun FlowStateMachineImpl<*>.waitingFlowInfo(): WaitingFlowInfo? {
             is FlowIORequest.ExecuteAsyncOperation -> flowInfoOf(
                     WaitingSource.EXTERNAL_OPERATION,
                     listOf(),
-                    request.operation.externalOperationImplName
+                    request.operation.unwrap().javaClass.canonicalName
             )
             else -> null
         }

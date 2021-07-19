@@ -35,6 +35,7 @@ import net.corda.core.identity.CordaX500Name
 import net.corda.core.identity.Party
 import net.corda.core.internal.FlowAsyncOperation
 import net.corda.core.internal.FlowIORequest
+import net.corda.core.internal.WaitForLedgerCommit
 import net.corda.core.internal.WaitForStateConsumption
 import net.corda.core.internal.declaredField
 import net.corda.core.internal.div
@@ -479,7 +480,6 @@ class CheckpointDumperImpl(private val checkpointStorage: CheckpointStorage, pri
             is FlowIORequest.Receive -> SuspendedOn(receive = sessions)
             is FlowIORequest.SendAndReceive -> SuspendedOn(sendAndReceive = sessionToMessage.toJson())
             is FlowIORequest.CloseSessions -> SuspendedOn(closeSessions = sessions)
-            is FlowIORequest.WaitForLedgerCommit -> SuspendedOn(waitForLedgerCommit = hash)
             is FlowIORequest.GetFlowInfo -> SuspendedOn(getFlowInfo = sessions)
             is FlowIORequest.Sleep -> SuspendedOn(sleepTill = wakeUpAfter)
             is FlowIORequest.WaitForSessionConfirmations -> SuspendedOn(waitForSessionConfirmations = this)
@@ -487,6 +487,7 @@ class CheckpointDumperImpl(private val checkpointStorage: CheckpointStorage, pri
             is FlowIORequest.ExecuteAsyncOperation -> {
                 when (operation) {
                     is WaitForStateConsumption -> SuspendedOn(waitForStateConsumption = (operation as WaitForStateConsumption).stateRefs)
+                    is WaitForLedgerCommit -> SuspendedOn(waitForLedgerCommit = (operation as WaitForLedgerCommit).hash)
                     else -> SuspendedOn(customOperation = this)
                 }
             }

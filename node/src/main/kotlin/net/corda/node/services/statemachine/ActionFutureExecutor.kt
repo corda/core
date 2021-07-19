@@ -6,6 +6,7 @@ import net.corda.core.utilities.contextLogger
 import net.corda.core.utilities.debug
 import net.corda.node.services.api.ServiceHubInternal
 import java.time.Duration
+import java.util.concurrent.CancellationException
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 
@@ -54,26 +55,14 @@ internal class ActionFutureExecutor(
         val future = action.operation.execute(action.deduplicationId)
         future.thenMatch(
             success = { result -> scheduleWakeUpEvent(instance, Event.AsyncOperationCompletion(result)) },
-            failure = { exception -> scheduleWakeUpEvent(instance, Event.AsyncOperationThrows(exception)) }
-        )
-        action.currentState.future = future
-    }
-
-    /**
-     * Suspend a flow until the transaction specified in [action] is committed.
-     *
-     * @param fiber The [FlowFiber] to resume after the committing the specified transaction
-     * @param action [Action.TrackTransaction] contains the transaction hash to wait for
-     */
-    @Suspendable
-    fun awaitTransaction(fiber: FlowFiber, action: Action.TrackTransaction) {
-        cancelFutureIfRunning(fiber, action.currentState)
-        val instance = fiber.instanceId
-        log.debug { "Suspending flow ${instance.runId} until transaction ${action.hash} is committed" }
-        val future = services.validatedTransactions.trackTransactionWithNoWarning(action.hash)
-        future.thenMatch(
-            success = { transaction -> scheduleWakeUpEvent(instance, Event.TransactionCommitted(transaction)) },
-            failure = { exception -> scheduleWakeUpEvent(instance, Event.Error(exception)) }
+            failure = { exception ->
+                // If canceling the future happens from within the state machine (i.e. on a fiber), then there is no reason signaling the fiber
+                // with a [Event.AsyncOperationThrows] as we are already aware of when we cancel it. In addition it gets the statemachine
+                // into an erroneous state as it will throw an extra exception (CancellationException).
+                if (exception !is CancellationException || FlowStateMachineImpl.currentStateMachine() == null) {
+                    scheduleWakeUpEvent(instance, Event.AsyncOperationThrows(exception))
+                }
+            }
         )
         action.currentState.future = future
     }

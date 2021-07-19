@@ -560,7 +560,10 @@ open class InternalMockNetwork(cordappPackages: List<String> = emptyList(),
         }
     }
 
-    /** Returns true if there are any flows suspended waiting for an async operation to complete. */
+    /**
+     * Returns true if there are any flows suspended waiting for an async operation to complete, except for async operations that
+     * need to collect errors from sessions (e.g. [WaitForLedgerCommit]).
+     */
     private fun anyFlowsSuspendedOnAsyncOperation(): Boolean {
         val allNodes = this._nodes
         val allActiveFlows = allNodes.flatMap { it.smm.snapshot() }
@@ -568,7 +571,8 @@ open class InternalMockNetwork(cordappPackages: List<String> = emptyList(),
         return allActiveFlows.any {
             val flowState = it.snapshot().checkpoint.flowState
             flowState is FlowState.Started && when (flowState.flowIORequest) {
-                is FlowIORequest.ExecuteAsyncOperation -> true
+                is FlowIORequest.ExecuteAsyncOperation ->
+                    !(flowState.flowIORequest as FlowIORequest.ExecuteAsyncOperation<*>).operation.collectErrorsFromSessions
                 is FlowIORequest.Sleep -> true
                 else -> false
             }

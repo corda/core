@@ -44,7 +44,6 @@ internal class ActionExecutorImpl(
     override fun executeAction(fiber: FlowFiber, action: Action) {
         log.trace { "Flow ${fiber.id} executing $action" }
         return when (action) {
-            is Action.TrackTransaction -> executeTrackTransaction(fiber, action)
             is Action.PersistCheckpoint -> executePersistCheckpoint(action)
             is Action.PersistDeduplicationFacts -> executePersistDeduplicationIds(action)
             is Action.AcknowledgeMessages -> executeAcknowledgeMessages(action)
@@ -75,11 +74,6 @@ internal class ActionExecutorImpl(
     }
     private fun executeReleaseSoftLocks(action: Action.ReleaseSoftLocks) {
         if (action.uuid != null) services.vaultService.softLockRelease(action.uuid)
-    }
-
-    @Suspendable
-    private fun executeTrackTransaction(fiber: FlowFiber, action: Action.TrackTransaction) {
-        actionFutureExecutor.awaitTransaction(fiber, action)
     }
 
     @Suspendable

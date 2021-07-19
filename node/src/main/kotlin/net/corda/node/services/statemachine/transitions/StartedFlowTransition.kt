@@ -9,6 +9,7 @@ import net.corda.core.internal.DeclaredField
 import net.corda.core.internal.FlowIORequest
 import net.corda.core.serialization.SerializedBytes
 import net.corda.core.utilities.contextLogger
+import net.corda.core.utilities.debug
 import net.corda.core.utilities.toNonEmptySet
 import net.corda.node.services.statemachine.*
 import org.slf4j.Logger
@@ -34,8 +35,10 @@ class StartedFlowTransition(
         val flowIORequest = started.flowIORequest
         val (newState, errorsToThrow) = collectRelevantErrorsToThrow(startingState, flowIORequest)
         if (errorsToThrow.isNotEmpty()) {
+
+            startingState.cancelFutureIfRunning()
             return TransitionResult(
-                    newState = newState.copy(isFlowResumed = true),
+                    newState = newState.copy(isFlowResumed = true, isWaitingForFuture = false),
                     // throw the first exception. TODO should this aggregate all of them somehow?
                     actions = listOf(Action.CreateTransaction),
                     continuation = FlowContinuation.Throw(errorsToThrow[0])
@@ -46,7 +49,6 @@ class StartedFlowTransition(
             is FlowIORequest.Receive -> receiveTransition(flowIORequest)
             is FlowIORequest.SendAndReceive -> sendAndReceiveTransition(flowIORequest)
             is FlowIORequest.CloseSessions -> closeSessionTransition(flowIORequest)
-            is FlowIORequest.WaitForLedgerCommit -> waitForLedgerCommitTransition(flowIORequest)
             is FlowIORequest.Sleep -> sleepTransition(flowIORequest)
             is FlowIORequest.GetFlowInfo -> getFlowInfoTransition(flowIORequest)
             is FlowIORequest.WaitForSessionConfirmations -> waitForSessionConfirmationsTransition()
@@ -106,24 +108,6 @@ class StartedFlowTransition(
                 actions.add(Action.SleepUntil(currentState, flowIORequest.wakeUpAfter))
                 FlowContinuation.ProcessEvents
             }
-        } else {
-            TransitionResult(startingState)
-        }
-    }
-
-    private fun waitForLedgerCommitTransition(flowIORequest: FlowIORequest.WaitForLedgerCommit): TransitionResult {
-        // This ensures that the [WaitForLedgerCommit] request is not executed multiple times if extra
-        // [DoRemainingWork] events are pushed onto the fiber's event queue before the flow has really woken up
-        return if (!startingState.isWaitingForFuture) {
-            val state = startingState.copy(isWaitingForFuture = true)
-            TransitionResult(
-                newState = state,
-                actions = listOf(
-                    Action.CreateTransaction,
-                    Action.TrackTransaction(flowIORequest.hash, state),
-                    Action.CommitTransaction(state)
-                )
-            )
         } else {
             TransitionResult(startingState)
         }
@@ -456,9 +440,6 @@ class StartedFlowTransition(
                 val endedSessionErrors = collectEndedSessionErrors(sessionIds, startingState.checkpoint)
                 Pair(newState, erroredSessionErrors + endedSessionErrors)
             }
-            is FlowIORequest.WaitForLedgerCommit -> {
-                return collectErroredSessionErrors(startingState, startingState.checkpoint.checkpointState.sessions.keys)
-            }
             is FlowIORequest.GetFlowInfo -> {
                 val sessionIds = flowIORequest.sessions.map(this::sessionToSessionId)
                 val (newState, erroredSessionErrors) = collectErroredSessionErrors(startingState, sessionIds)
@@ -479,7 +460,11 @@ class StartedFlowTransition(
                 Pair(startingState, errors)
             }
             is FlowIORequest.ExecuteAsyncOperation<*> -> {
-                Pair(startingState, emptyList())
+                if (flowIORequest.operation.collectErrorsFromSessions) {
+                    collectErroredSessionErrors(startingState, startingState.checkpoint.checkpointState.sessions.keys)
+                } else {
+                    Pair(startingState, emptyList())
+                }
             }
             FlowIORequest.ForceCheckpoint -> {
                 Pair(startingState, emptyList())
@@ -548,5 +533,13 @@ class StartedFlowTransition(
                 null
             }
         }.toMap()
+    }
+
+    private fun StateMachineState.cancelFutureIfRunning() {
+        future?.run {
+            logger.debug { "Cancelling future for flow ${flowLogic.runId}" }
+            if (!isDone) cancel(true)
+            future = null
+        }
     }
 }

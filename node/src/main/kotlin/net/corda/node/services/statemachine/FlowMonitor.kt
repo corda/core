@@ -4,6 +4,7 @@ import net.corda.core.flows.FlowSession
 import net.corda.core.internal.FlowIORequest
 import net.corda.core.internal.FlowStateMachine
 import net.corda.core.internal.VisibleForTesting
+import net.corda.core.internal.unwrap
 import net.corda.core.utilities.loggerFor
 import net.corda.node.internal.LifecycleSupport
 import java.time.Duration
@@ -77,11 +78,10 @@ internal class FlowMonitor(
                 is FlowIORequest.Receive -> "to receive messages from parties ${request.sessions.partiesInvolved()}"
                 is FlowIORequest.SendAndReceive -> "to send and receive messages from parties ${request.sessionToMessage.keys.partiesInvolved()}"
                 is FlowIORequest.CloseSessions -> "to close sessions: ${request.sessions}"
-                is FlowIORequest.WaitForLedgerCommit -> "for the ledger to commit transaction with hash ${request.hash}"
                 is FlowIORequest.GetFlowInfo -> "to get flow information from parties ${request.sessions.partiesInvolved()}"
                 is FlowIORequest.Sleep -> "to wake up from sleep ending at ${LocalDateTime.ofInstant(request.wakeUpAfter, ZoneId.systemDefault())}"
                 is FlowIORequest.WaitForSessionConfirmations -> "for sessions to be confirmed"
-                is FlowIORequest.ExecuteAsyncOperation -> "for asynchronous operation of type ${request.operation::javaClass} to complete"
+                is FlowIORequest.ExecuteAsyncOperation -> "for asynchronous operation of type (${request.operation.unwrap()}) to complete"
                 FlowIORequest.ForceCheckpoint -> "for forcing a checkpoint at an arbitrary point in a flow"
             }
         )

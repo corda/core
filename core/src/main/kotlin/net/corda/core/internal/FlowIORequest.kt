@@ -1,11 +1,9 @@
 package net.corda.core.internal
 
 import net.corda.core.DeleteForDJVM
-import net.corda.core.crypto.SecureHash
 import net.corda.core.flows.FlowInfo
 import net.corda.core.flows.FlowSession
 import net.corda.core.serialization.SerializedBytes
-import net.corda.core.transactions.SignedTransaction
 import net.corda.core.utilities.NonEmptySet
 import java.time.Instant
 
@@ -61,14 +59,6 @@ sealed class FlowIORequest<out R : Any> {
      * @property sessions the sessions to be closed.
      */
     data class CloseSessions(val sessions: NonEmptySet<FlowSession>): FlowIORequest<Unit>()
-
-    /**
-     * Wait for a transaction to be committed to the database.
-     *
-     * @property hash the hash of the transaction.
-     * @return the committed transaction.
-     */
-    data class WaitForLedgerCommit(val hash: SecureHash) : FlowIORequest<SignedTransaction>()
 
     /**
      * Get the FlowInfo of the specified sessions.

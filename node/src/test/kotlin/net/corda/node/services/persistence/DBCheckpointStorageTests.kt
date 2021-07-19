@@ -513,6 +513,31 @@ class DBCheckpointStorageTests {
     }
 
     @Test(timeout = 300_000)
+    fun `Checkpoint long flowIoRequest string gets truncated`() {
+        val maxFlowIoRequestLength = DBCheckpointStorage.MAX_FLOW_IO_REQUEST_LENGTH
+        val (id, checkpoint) = newCheckpoint()
+        database.transaction {
+            checkpointStorage.addCheckpoint(id, checkpoint, checkpoint.serializeFlowState(), checkpoint.serializeCheckpointState())
+            val checkpointFromStorage = checkpointStorage.getCheckpoint(id)
+            assertNull(checkpointFromStorage!!.flowIoRequest)
+        }
+
+        val longString = """Long string Long string Long string Long string Long string Long string Long string Long string Long string
+            Long string Long string Long string Long string Long string Long string Long string Long string Long string Long string
+            Long string Long string Long string Long string Long string Long string Long string Long string Long string Long string
+        """.trimIndent()
+
+        database.transaction {
+            val updatedCheckpoint = checkpoint.copy(flowIoRequest = longString)
+            checkpointStorage.updateCheckpoint(id, updatedCheckpoint, updatedCheckpoint.serializeFlowState(), updatedCheckpoint.serializeCheckpointState())
+        }
+        database.transaction {
+            val checkpointFromStorage = checkpointStorage.getCheckpoint(id)
+            assertEquals(longString.take(maxFlowIoRequestLength), checkpointFromStorage!!.flowIoRequest)
+        }
+    }
+
+    @Test(timeout = 300_000)
     fun `Checkpoints can be fetched from the database by status`() {
         val (_, checkpoint) = newCheckpoint(1)
         // runnables
