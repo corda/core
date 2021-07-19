@@ -6,6 +6,7 @@ import net.corda.core.crypto.newSecureRandom
 import net.corda.core.internal.*
 import net.corda.core.utilities.days
 import net.corda.core.utilities.millis
+import net.i2p.crypto.eddsa.EdDSAPublicKey
 import org.bouncycastle.asn1.*
 import org.bouncycastle.asn1.x500.X500Name
 import org.bouncycastle.asn1.x500.style.BCStyle
@@ -16,6 +17,7 @@ import org.bouncycastle.cert.X509v3CertificateBuilder
 import org.bouncycastle.cert.bc.BcX509ExtensionUtils
 import org.bouncycastle.cert.jcajce.JcaX509ExtensionUtils
 import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder
+import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.bouncycastle.openssl.jcajce.JcaPEMWriter
 import org.bouncycastle.operator.ContentSigner
 import org.bouncycastle.operator.jcajce.JcaContentVerifierProviderBuilder
@@ -25,11 +27,13 @@ import org.bouncycastle.util.io.pem.PemReader
 import java.io.InputStream
 import java.math.BigInteger
 import java.nio.file.Path
+import java.security.KeyFactory
 import java.security.KeyPair
 import java.security.PublicKey
 import java.security.SignatureException
 import java.security.cert.*
 import java.security.cert.Certificate
+import java.security.spec.X509EncodedKeySpec
 import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -61,6 +65,7 @@ object X509Utilities {
     private const val KEY_ALIAS_REGEX = "[a-z0-9-]+"
     private const val KEY_ALIAS_MAX_LENGTH = 100
     private const val CERTIFICATE_SERIAL_NUMBER_LENGTH = 16
+    private val edDSAPublicKeyConverterKeyFactory = KeyFactory.getInstance("1.3.101.112", BouncyCastleProvider())
 
     /**
      * Checks if the provided key alias does not exceed maximum length and
@@ -313,7 +318,12 @@ object X509Utilities {
                 crlIssuer)
         return builder.build(signer).run {
             require(isValidOn(Date())){"Certificate is not valid at instant now"}
-            require(isSignatureValid(JcaContentVerifierProviderBuilder().build(issuerKeyPair.public))){"Invalid signature"}
+            var usePublicKey: PublicKey = issuerKeyPair.public
+            if (issuerKeyPair.public is EdDSAPublicKey) {
+                usePublicKey = edDSAPublicKeyConverterKeyFactory.generatePublic(X509EncodedKeySpec(issuerKeyPair.public.encoded))
+            }
+
+            require(isSignatureValid(JcaContentVerifierProviderBuilder().build(usePublicKey))){"Invalid signature"}
             toJca()
         }
     }
