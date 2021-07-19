@@ -70,6 +70,7 @@ import net.corda.djvm.source.ApiSource
 import net.corda.djvm.source.EmptyApi
 import net.corda.djvm.source.UserSource
 import net.corda.node.CordaClock
+import net.corda.node.InMemoryAppender
 import net.corda.node.VersionInfo
 import net.corda.node.internal.classloading.requireAnnotation
 import net.corda.node.internal.cordapp.CordappConfigFileProvider
@@ -171,6 +172,7 @@ import net.corda.nodeapi.internal.persistence.contextDatabase
 import net.corda.nodeapi.internal.persistence.withoutDatabaseAccess
 import net.corda.tools.shell.InteractiveShell
 import org.apache.activemq.artemis.utils.ReusableLatch
+import org.apache.logging.log4j.core.LoggerContext
 import org.jolokia.jvmagent.JolokiaServer
 import org.jolokia.jvmagent.JolokiaServerConfig
 import org.slf4j.Logger
@@ -342,6 +344,14 @@ abstract class AbstractNode<S>(val configuration: NodeConfiguration,
 
     private val cordappServices = MutableClassToInstanceMap.create<SerializeAsToken>()
     private val shutdownExecutor = Executors.newSingleThreadExecutor()
+
+    private val inMemoryAppenderForLogs = (LoggerContext.getContext().rootLogger.appenders["In-Memory-Appender"] as? InMemoryAppender).also {
+        if (it == null){
+            println("OH GAWD, why CANT I GET A REFERENCE!")
+        }else{
+            println("Great Success, we have a reference to the in-memory-appender")
+        }
+    }
 
     protected abstract val transactionVerifierWorkerCount: Int
     /**
