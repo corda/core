@@ -13,6 +13,7 @@ evaluationDependsOn(':node')
 configurations {
     runtimeArtifacts.extendsFrom runtimeClasspath
     capsuleRuntime
+    javaAgent
 }
 
 dependencies {
@@ -28,6 +29,11 @@ dependencies {
 
     testImplementation "org.junit.jupiter:junit-jupiter-api:${junit_jupiter_version}"
     testImplementation "junit:junit:$junit_version"
+
+    // agents added to the capsule jar
+    javaAgent group: 'io.opentelemetry.instrumentation.auto', name: 'opentelemetry-javaagent', version: openTelemetryAgentVersion, classifier: 'all'
+    javaAgent group: 'io.prometheus.jmx', name: 'jmx_prometheus_javaagent', version: jmxPrometheusAgentVersion
+
 }
 
 jar.enabled = false
@@ -50,9 +56,11 @@ task buildCordaJAR(type: FatCapsule, dependsOn: [
     archiveName = archiveFileName.get()
     applicationSource = files(
         nodeProject.configurations.runtimeClasspath,
+        project.configurations.javaAgent.files,
         nodeProject.tasks.jar,
         nodeProject.buildDir.toString() + '/resources/main/corda-reference.conf',
         "$rootDir/config/dev/log4j2.xml",
+        'prometheus-config.yaml',
         'NOTICE' // Copy CDDL notice
     )
     from configurations.capsuleRuntime.files.collect { zipTree(it) }
@@ -96,9 +104,11 @@ task buildCordaJAR(type: FatCapsule, dependsOn: [
         applicationVersion = corda_release_version
         applicationId = "net.corda.node.Corda"
         // See experimental/quasar-hook/README.md for how to generate.
-        def quasarExcludeExpression = "x(antlr**;bftsmart**;co.paralleluniverse**;com.codahale**;com.esotericsoftware**;com.fasterxml**;com.google**;com.ibm**;com.intellij**;com.jcabi**;com.nhaarman**;com.opengamma**;com.typesafe**;com.zaxxer**;de.javakaffee**;groovy**;groovyjarjarantlr**;groovyjarjarasm**;io.atomix**;io.github**;io.netty**;jdk**;kotlin**;net.corda.djvm**;djvm**;net.bytebuddy**;net.i2p**;org.apache**;org.bouncycastle**;org.codehaus**;org.crsh**;org.dom4j**;org.fusesource**;org.h2**;org.hibernate**;org.jboss**;org.jcp**;org.joda**;org.objectweb**;org.objenesis**;org.slf4j**;org.w3c**;org.xml**;org.yaml**;reflectasm**;rx**;org.jolokia**;com.lmax**;picocli**;liquibase**;com.github.benmanes**;org.json**;org.postgresql**;nonapi.io.github.classgraph**)"
+        def quasarExcludeExpression = "x(antlr**;bftsmart**;co.paralleluniverse**;com.codahale**;com.esotericsoftware**;com.fasterxml**;com.google**;com.ibm**;com.intellij**;com.jcabi**;com.nhaarman**;com.opengamma**;com.splunk**;com.typesafe**;com.zaxxer**;de.javakaffee**;groovy**;groovyjarjarantlr**;groovyjarjarasm**;io.atomix**;io.github**;io.netty**;io.opentelemetry**;jdk**;kotlin**;net.corda.djvm**;djvm**;net.bytebuddy**;net.i2p**;org.apache**;org.bouncycastle**;org.codehaus**;org.crsh**;org.dom4j**;org.fusesource**;org.h2**;org.hibernate**;org.jboss**;org.jcp**;org.joda**;org.objectweb**;org.objenesis**;org.slf4j**;org.w3c**;org.xml**;org.yaml**;reflectasm**;rx**;org.jolokia**;com.lmax**;picocli**;liquibase**;com.github.benmanes**;org.json**;org.postgresql**;nonapi.io.github.classgraph**)"
         def quasarClassLoaderExclusion = "l(net.corda.djvm.**;net.corda.core.serialization.internal.**)"
         javaAgents = quasar_classifier ? ["quasar-core-${quasar_version}-${quasar_classifier}.jar=${quasarExcludeExpression}${quasarClassLoaderExclusion}"] : ["quasar-core-${quasar_version}.jar=${quasarExcludeExpression}${quasarClassLoaderExclusion}"]
+        javaAgents << "jmx_prometheus_javaagent-${jmxPrometheusAgentVersion}.jar=\$PROMETHEUS_HOST:\$PROMETHEUS_PORT:\$CAPSULE_DIR/prometheus-config.yaml"
+        javaAgents << "opentelemetry-javaagent-${openTelemetryAgentVersion}-all.jar"
         systemProperties['visualvm.display.name'] = 'Corda'
         if (JavaVersion.current() == JavaVersion.VERSION_1_8) {
             minJavaVersion = '1.8.0'

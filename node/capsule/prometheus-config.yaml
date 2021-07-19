@@ -1,0 +1,22 @@
+---
+rules:
+  # net.corda<type=Caches, component=NodeVaultService_producedStates, name=hits><>Count
+  - pattern: 'net.corda<type=(\w+), component=(\w+), name=(\w+)><>(\w+)(\d+)'
+    name: corda.$1.$3
+    value: $5
+    type: GAUGE
+    attrNameSnakeCase: true
+    labels:
+      type: $1
+      source: "corda"
+      component: $2
+      bucket: $4
+  - pattern: 'net.corda<type=(\w+), name=(\w+)><>(.*): (\d+)'
+    name: corda.$1.$2
+    value: $4
+    type: GAUGE
+    attrNameSnakeCase: true
+    labels:
+      type: $1
+      source: "corda"
+      bucket: $3

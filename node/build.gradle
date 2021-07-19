@@ -108,6 +108,7 @@ dependencies {
     compile "org.apache.logging.log4j:log4j-slf4j-impl:${log4j_version}"
     compile "org.apache.logging.log4j:log4j-web:${log4j_version}"
     compile "org.slf4j:jul-to-slf4j:$slf4j_version"
+    compile "com.splunk.logging:splunk-library-javalogging:$splunklibraryVersion"
 
     compile "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
     runtimeOnly "org.jetbrains.kotlin:kotlin-stdlib-jre8:$kotlin_version"
@@ -139,6 +140,8 @@ dependencies {
 
     // Coda Hale's Metrics: for monitoring of key statistics
     compile "io.dropwizard.metrics:metrics-jmx:$metrics_version"
+    // Open Telemetry SDK
+    compile "io.opentelemetry:opentelemetry-sdk:0.9.1"
 
     // TypeSafe Config: for simple and human friendly config files.
     compile "com.typesafe:config:$typesafe_config_version"
@@ -285,11 +288,13 @@ quasar {
             "com.github.benmanes.caffeine.**",
             "com.google.**",
             "com.lmax.**",
+            "com.splunk.**",
             "com.zaxxer.**",
             "djvm**",
             "net.bytebuddy**",
             "io.github.classgraph**",
             "io.netty*",
+            "io.opentelemetry**",
             "liquibase**",
             "net.corda.djvm**",
             "net.i2p.crypto.**",

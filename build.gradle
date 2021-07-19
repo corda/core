@@ -128,6 +128,9 @@ buildscript {
     ext.controlsfx_version = '8.40.15'
     ext.detekt_version = constants.getProperty('detektVersion')
     ext.docker_java_version = constants.getProperty("dockerJavaVersion")
+    ext.splunklibraryVersion = constants.getProperty('splunklibraryVersion')
+    ext.jmxPrometheusAgentVersion = constants.getProperty('jmxPrometheusAgentVersion')
+    ext.openTelemetryAgentVersion = constants.getProperty('openTelemetryAgentVersion')
     if (JavaVersion.current().isJava8()) {
         ext.fontawesomefx_commons_version = '8.15'
         ext.fontawesomefx_fontawesome_version = '4.7.0-5'
@@ -238,7 +241,7 @@ apply plugin: 'com.jfrog.artifactory'
 apply plugin: 'com.r3.testing.distributed-testing'
 
 
-// If the command line project option -PversionFromGit is added to the gradle invocation, we'll resolve 
+// If the command line project option -PversionFromGit is added to the gradle invocation, we'll resolve
 // the latest git commit hash and timestamp and create a version postfix from that
 if (project.hasProperty("versionFromGit")){
     ext.versionSuffix = "${grgit.head().dateTime.format("yyyyMMdd_HHmmss")}-${grgit.head().abbreviatedId}"
@@ -428,6 +431,17 @@ allprojects {
             }
             mavenCentral()
             jcenter()
+            maven { url "https://repo.spring.io/libs-milestone"
+                content {
+                    includeGroup 'com.splunk.logging'
+                }
+            }
+            maven { url "https://dl.bintray.com/open-telemetry/maven"
+                content {
+                    includeGroup 'io.opentelemetry'
+                    includeGroup 'io.opentelemetry.instrumentation.auto'
+                }
+            }
         }
     }
 

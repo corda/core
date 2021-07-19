@@ -2,6 +2,17 @@
 <Configuration status="info" shutdownHook="disable">
 
     <Properties>
+        <Property name="splunkEnabled">${env:SPLUNK_ENABLED:-false}</Property>
+        <Property name="host">${env:HOST:-${docker:containerId:-localhost}}</Property>
+        <Property name="splunk.url">${env:SPLUNK_URL}</Property>
+        <Property name="splunk.token">${env:SPLUNK_TOKEN}</Property>
+        <Property name="splunk.index">${env:SPLUNK_INDEX}</Property>
+        <Property name="splunk.source">${env:SPLUNK_SOURCE:-corda}</Property>
+        <Property name="splunk.sourcetype">${env:SPLUNK_SOURCETYPE:-corda:logs}</Property>
+        <Property name="splunk.batch_size_bytes">${env:SPLUNK_BATCH_SIZE_BYTES:-65536}</Property>
+        <Property name="splunk.batch_size_count">${env:SPLUNK_BATCH_SIZE_COUNT:-1000}</Property>
+        <Property name="splunk.batch_interval">${env:SPLUNK_BATCH_INTERVAL:-500}</Property>
+        <Property name="splunk.disableCertificateValidation">${env:SPLUNK_SKIPTLSVERIFY:-false}</Property>
         <Property name="log-path">${sys:log-path:-logs}</Property>
         <Property name="log-name">node-${hostName}</Property>
         <Property name="diagnostic-log-name">diagnostic-${hostName}</Property>
@@ -15,8 +26,13 @@
             <Script language="nashorn"><![CDATA[
                 var System = Java.type('java.lang.System');
                 var level = System.getProperty("consoleLogLevel");
-                var enabled = System.getProperty("consoleLoggingEnabled");
-                enabled == "true" && (level == "debug" || level == "trace") ? "Console-Debug-Appender" : "Console-Appender";
+                var splunkEnabled = System.getProperty("splunkEnabled");
+                if (splunkEnabled == "true") {
+                  "Splunk";
+                } else {
+                  var enabled = System.getProperty("consoleLoggingEnabled");
+                  enabled == "true" && (level == "debug" || level == "trace") ? "Console-Debug-Appender" : "Console-Appender";
+                }
             ]]></Script>
             <AppenderSet>
 
@@ -58,6 +74,21 @@
                         </ScriptPatternSelector>
                     </PatternLayout>
                 </Console>
+
+                <SplunkHttp name="Splunk"
+                            url="${sys:splunk.url}"
+                            token="${sys:splunk.token}"
+                            host="${sys:host}"
+                            index="${sys:splunk.index}"
+                            source="${sys:splunk.source}"
+                            sourcetype="${sys:splunk.sourcetype}"
+                            messageFormat="text"
+                            batch_size_bytes="${sys:splunk.batch_size_bytes}"
+                            batch_size_count="${sys:splunk.batch_size_count}"
+                            batch_interval="${sys:splunk.batch_interval}"
+                            disableCertificateValidation="${sys:splunk.disableCertificateValidation}">
+                    <PatternLayout pattern="%msg" />
+                </SplunkHttp>
             </AppenderSet>
         </ScriptAppenderSelector>
 
