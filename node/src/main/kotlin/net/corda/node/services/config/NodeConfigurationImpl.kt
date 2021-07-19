@@ -84,7 +84,8 @@ data class NodeConfigurationImpl(
         override val configurationWithOptions: ConfigurationWithOptions,
         override val flowExternalOperationThreadPoolSize: Int = Defaults.flowExternalOperationThreadPoolSize,
         override val quasarExcludePackages: List<String> = Defaults.quasarExcludePackages,
-        override val reloadCheckpointAfterSuspend: Boolean = Defaults.reloadCheckpointAfterSuspend
+        override val reloadCheckpointAfterSuspend: Boolean = Defaults.reloadCheckpointAfterSuspend,
+        override val customTransitionInterceptor: String? = Defaults.customTransitionInterceptor
 
 ) : NodeConfiguration {
     internal object Defaults {
@@ -125,6 +126,7 @@ data class NodeConfigurationImpl(
         const val flowExternalOperationThreadPoolSize: Int = 1
         val quasarExcludePackages: List<String> = emptyList()
         val reloadCheckpointAfterSuspend: Boolean = System.getProperty("reloadCheckpointAfterSuspend", "false")!!.toBoolean()
+        val customTransitionInterceptor: String? = null
 
         fun cordappsDirectories(baseDirectory: Path) = listOf(baseDirectory / CORDAPPS_DIR_NAME_DEFAULT)
 

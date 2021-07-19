@@ -68,6 +68,7 @@ internal object V1NodeConfigurationSpec : Configuration.Specification<NodeConfig
     private val flowExternalOperationThreadPoolSize by int().optional().withDefaultValue(Defaults.flowExternalOperationThreadPoolSize)
     private val quasarExcludePackages by string().list().optional().withDefaultValue(Defaults.quasarExcludePackages)
     private val reloadCheckpointAfterSuspend by boolean().optional().withDefaultValue(Defaults.reloadCheckpointAfterSuspend)
+    private val customTransitionInterceptor by string().optional()
     @Suppress("unused")
     private val custom by nestedObject().optional()
     @Suppress("unused")
@@ -136,7 +137,8 @@ internal object V1NodeConfigurationSpec : Configuration.Specification<NodeConfig
                     configurationWithOptions = ConfigurationWithOptions(configuration, Configuration.Options.defaults),
                     flowExternalOperationThreadPoolSize = config[flowExternalOperationThreadPoolSize],
                     quasarExcludePackages = config[quasarExcludePackages],
-                    reloadCheckpointAfterSuspend = config[reloadCheckpointAfterSuspend]
+                    reloadCheckpointAfterSuspend = config[reloadCheckpointAfterSuspend],
+                    customTransitionInterceptor = config[customTransitionInterceptor]
             ))
         } catch (e: Exception) {
             return when (e) {
