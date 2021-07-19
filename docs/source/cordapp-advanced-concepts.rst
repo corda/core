@@ -253,7 +253,7 @@ but Valencia Oranges. This requirement translates into the fact that the library
 Let's assume the `Apples` CorDapp bundles the `Oranges` CorDapp as a fat-jar.
 If someone attempts to build a swap transaction they would find it impossible:
 
- - If the two attachments are added to the transaction, then the `com.orangecompany.Orange` class would be found in both, and that would breat the rule that states
+ - If the two attachments are added to the transaction, then the `com.orangecompany.Orange` class would be found in both, and that would break the rule that states
    "There can be only one and precisely one attachment that is identified as the contract code that controls each state".
  - In case only the `Apples` CorDapp is attached then the constraint of the `Oranges` states would not pass, as the JAR would not be signed by the actual `OrangeCo`.
 
