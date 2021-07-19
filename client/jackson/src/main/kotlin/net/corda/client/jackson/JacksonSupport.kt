@@ -160,6 +160,12 @@ object JacksonSupport {
         return configureMapper(mapper)
     }
 
+    private val customModules : MutableList<Module> = Collections.synchronizedList(ArrayList())
+
+    fun addCustomModule(module: Module) {
+        customModules.add(module)
+    }
+
     private fun configureMapper(mapper: ObjectMapper): ObjectMapper {
         return mapper.apply {
             enable(SerializationFeature.INDENT_OUTPUT)
@@ -179,6 +185,7 @@ object JacksonSupport {
             addMixIn(X500Principal::class.java, X500PrincipalMixin::class.java)
             addMixIn(X509Certificate::class.java, X509CertificateMixin::class.java)
             addMixIn(CertPath::class.java, CertPathMixin::class.java)
+            customModules.forEach { mapper.registerModule(it) }
         }
     }
 
