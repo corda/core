@@ -19,7 +19,7 @@ import net.corda.core.utilities.unwrap
 import net.corda.node.services.Permissions
 import net.corda.node.services.statemachine.Checkpoint
 import net.corda.node.services.statemachine.FlowTimeoutException
-import net.corda.node.services.statemachine.StaffedFlowHospital
+import net.corda.node.services.statemachine.hospital.external.DatabaseEndocrinologist
 import net.corda.testing.core.ALICE_NAME
 import net.corda.testing.core.BOB_NAME
 import net.corda.testing.core.singleIdentity
@@ -59,12 +59,12 @@ class FlowRetryTest {
         TransientConnectionFailureFlow.retryCount = -1
         WrappedTransientConnectionFailureFlow.retryCount = -1
         GeneralExternalFailureFlow.retryCount = -1
-        StaffedFlowHospital.DatabaseEndocrinologist.customConditions.add { true }
+        DatabaseEndocrinologist.customConditions.add { true }
     }
 
     @After
     fun cleanUp() {
-        StaffedFlowHospital.DatabaseEndocrinologist.customConditions.clear()
+        DatabaseEndocrinologist.customConditions.clear()
     }
 
     @Test(timeout = 300_000)

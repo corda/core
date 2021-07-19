@@ -38,6 +38,16 @@ import net.corda.node.services.api.CheckpointStorage
 import net.corda.node.services.api.ServiceHubInternal
 import net.corda.node.services.messaging.DeduplicationHandler
 import net.corda.node.services.statemachine.FlowStateMachineImpl.Companion.currentStateMachine
+import net.corda.node.services.statemachine.hospital.external.DatabaseEndocrinologist
+import net.corda.node.services.statemachine.hospital.external.DeadlockNurse
+import net.corda.node.services.statemachine.hospital.external.DuplicateInsertSpecialist
+import net.corda.node.services.statemachine.hospital.ResuscitationSpecialist
+import net.corda.node.services.statemachine.hospital.SedationNurse
+import net.corda.node.services.statemachine.hospital.TransientConnectionCardiologist
+import net.corda.node.services.statemachine.hospital.TransitionErrorGeneralPractitioner
+import net.corda.node.services.statemachine.hospital.external.DoctorTimeout
+import net.corda.node.services.statemachine.hospital.external.FinalityDoctor
+import net.corda.node.services.statemachine.hospital.external.NotaryDoctor
 import net.corda.node.services.statemachine.interceptors.DumpHistoryOnErrorInterceptor
 import net.corda.node.services.statemachine.interceptors.HospitalisingInterceptor
 import net.corda.node.services.statemachine.interceptors.PrintingInterceptor
@@ -990,7 +1000,20 @@ internal class SingleThreadedStateMachineManager(
     private fun makeFlowHospital() : StaffedFlowHospital {
         // If the node is running as a notary service, we don't retain errored session initiation requests in case of missing Cordapps
         // to avoid memory leaks if the notary is under heavy load.
-        return StaffedFlowHospital(flowMessaging, serviceHub.clock, ourSenderUUID)
+        // Based on staff members found on classpath(?) instantiate a list of them. For now creating a list including all staff members.
+        val staff = listOf(
+                DeadlockNurse,
+                DuplicateInsertSpecialist,
+                DoctorTimeout,
+                FinalityDoctor,
+                TransientConnectionCardiologist,
+                DatabaseEndocrinologist,
+                TransitionErrorGeneralPractitioner,
+                SedationNurse,
+                NotaryDoctor,
+                ResuscitationSpecialist
+        )
+        return StaffedFlowHospital(flowMessaging, serviceHub.clock, ourSenderUUID, staff)
     }
 
     private fun StateMachineInnerState.removeFlowOrderly(

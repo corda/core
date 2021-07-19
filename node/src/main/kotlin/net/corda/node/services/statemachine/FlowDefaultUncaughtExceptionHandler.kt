@@ -5,6 +5,7 @@ import net.corda.core.flows.StateMachineRunId
 import net.corda.core.utilities.contextLogger
 import net.corda.core.utilities.debug
 import net.corda.node.services.api.CheckpointStorage
+import net.corda.node.services.statemachine.hospital.TransitionErrorGeneralPractitioner
 import net.corda.node.utilities.errorAndTerminate
 import net.corda.nodeapi.internal.persistence.CordaPersistence
 import java.util.concurrent.ScheduledExecutorService
@@ -40,7 +41,7 @@ class FlowDefaultUncaughtExceptionHandler(
         if (!fiber.resultFuture.isDone) {
             fiber.transientState.let { state ->
                 fiber.logger.warn("Forcing flow $id into overnight observation")
-                flowHospital.forceIntoOvernightObservation(state, listOf(throwable))
+                flowHospital.forceIntoOvernightObservation(state, listOf(throwable), listOf(TransitionErrorGeneralPractitioner))
                 val hospitalizedCheckpoint = state.checkpoint.copy(status = Checkpoint.FlowStatus.HOSPITALIZED)
                 val hospitalizedState = state.copy(checkpoint = hospitalizedCheckpoint)
                 fiber.transientState = hospitalizedState

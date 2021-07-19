@@ -13,6 +13,7 @@ import net.corda.finance.POUNDS
 import net.corda.finance.contracts.asset.Cash
 import net.corda.finance.issuedBy
 import net.corda.node.services.statemachine.StaffedFlowHospital.*
+import net.corda.node.services.statemachine.hospital.external.FinalityDoctor
 import net.corda.testing.core.ALICE_NAME
 import net.corda.testing.core.BOB_NAME
 import net.corda.testing.core.singleIdentity

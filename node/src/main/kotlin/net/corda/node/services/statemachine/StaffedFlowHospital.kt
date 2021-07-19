@@ -1,37 +1,22 @@
 package net.corda.node.services.statemachine
 
 import net.corda.core.crypto.newSecureRandom
-import net.corda.core.flows.FlowException
-import net.corda.core.flows.HospitalizeFlowException
-import net.corda.core.flows.NotaryError
-import net.corda.core.flows.NotaryException
-import net.corda.core.flows.ReceiveFinalityFlow
-import net.corda.core.flows.ReceiveTransactionFlow
 import net.corda.core.flows.StateMachineRunId
-import net.corda.core.flows.UnexpectedFlowEndException
 import net.corda.core.identity.Party
-import net.corda.core.internal.DeclaredField
 import net.corda.core.internal.ThreadBox
-import net.corda.core.internal.TimedFlow
 import net.corda.core.internal.VisibleForTesting
 import net.corda.core.internal.bufferUntilSubscribed
 import net.corda.core.messaging.DataFeed
 import net.corda.core.utilities.contextLogger
-import net.corda.core.utilities.debug
 import net.corda.core.utilities.minutes
 import net.corda.core.utilities.seconds
-import net.corda.node.services.FinalityHandler
-import org.hibernate.exception.ConstraintViolationException
 import rx.subjects.PublishSubject
 import java.io.Closeable
-import java.sql.SQLException
-import java.sql.SQLTransientConnectionException
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
-import javax.persistence.PersistenceException
 import kotlin.collections.HashMap
 import kotlin.concurrent.timerTask
 import kotlin.math.pow
@@ -42,21 +27,10 @@ import kotlin.math.pow
 @Suppress("TooManyFunctions")
 class StaffedFlowHospital(private val flowMessaging: FlowMessaging,
                           private val clock: Clock,
-                          private val ourSenderUUID: String) : Closeable {
+                          private val ourSenderUUID: String,
+                          private val staff: List<Staff> = listOf()) : Closeable {
     companion object {
-        private val log = contextLogger()
-        private val staff = listOf(
-            DeadlockNurse,
-            DuplicateInsertSpecialist,
-            DoctorTimeout,
-            FinalityDoctor,
-            TransientConnectionCardiologist,
-            DatabaseEndocrinologist,
-            TransitionErrorGeneralPractitioner,
-            SedationNurse,
-            NotaryDoctor,
-            ResuscitationSpecialist
-        )
+        val log = contextLogger()
 
         private const val MAX_BACKOFF_TIME = 110.0 // Totals to 2 minutes when calculating the backoff time
 
@@ -74,6 +48,8 @@ class StaffedFlowHospital(private val flowMessaging: FlowMessaging,
 
         @VisibleForTesting
         val onFlowAdmitted = mutableListOf<(id: StateMachineRunId) -> Unit>()
+
+        val EMPTY_DIAGNOSES = mapOf<Diagnosis, List<Staff>>(Diagnosis.TERMINAL to listOf())
     }
 
     private val hospitalJobTimer = Timer("FlowHospitalJobTimer", true)
@@ -192,8 +168,9 @@ class StaffedFlowHospital(private val flowMessaging: FlowMessaging,
      *
      * @param currentState The [StateMachineState] of the flow that is being forced into observation
      * @param errors The errors to include in the new medical record
+     * @param by The staff member(s) that will give the new medical record
      */
-    fun forceIntoOvernightObservation(currentState: StateMachineState, errors: List<Throwable>) {
+    fun forceIntoOvernightObservation(currentState: StateMachineState, errors: List<Throwable>, by: List<Staff>) {
         mutex.locked {
             val id = currentState.flowLogic.runId
             val medicalHistory = flowPatients.computeIfAbsent(id) { FlowMedicalHistory() }
@@ -202,7 +179,7 @@ class StaffedFlowHospital(private val flowMessaging: FlowMessaging,
                 flowId = id,
                 suspendCount = currentState.checkpoint.checkpointState.numberOfSuspends,
                 errors = errors,
-                by = listOf(TransitionErrorGeneralPractitioner),
+                by = by,
                 outcome = Outcome.OVERNIGHT_OBSERVATION
             )
 
@@ -213,29 +190,46 @@ class StaffedFlowHospital(private val flowMessaging: FlowMessaging,
         }
     }
 
-
     /**
      * Request treatment for the [flowFiber].
      */
     fun requestTreatment(flowFiber: FlowFiber, currentState: StateMachineState, errors: List<Throwable>) {
         if (!currentState.isRemoved) {
             flowsInHospital[flowFiber.id] = flowFiber
-            admit(flowFiber, currentState, errors)
+            val (event, backOffForChronicCondition) = admit(flowFiber, currentState, errors)
+
+            if (backOffForChronicCondition.isZero) {
+                flowFiber.scheduleEvent(event)
+            } else {
+                hospitalJobTimer.schedule(timerTask {
+                    flowFiber.scheduleEvent(event)
+                }, backOffForChronicCondition.toMillis())
+            }
         }
     }
 
     @Suppress("ComplexMethod")
-    private fun admit(flowFiber: FlowFiber, currentState: StateMachineState, errors: List<Throwable>) {
+    @VisibleForTesting
+    fun admit(flowFiber: FlowFiber, currentState: StateMachineState, errors: List<Throwable>): Pair<Event, Duration> {
         val time = clock.instant()
         log.info("Flow ${flowFiber.id} admitted to hospital in state $currentState")
         onFlowAdmitted.forEach { it.invoke(flowFiber.id) }
 
-        val (event, backOffForChronicCondition) = mutex.locked {
+        return mutex.locked {
             val medicalHistory = flowPatients.computeIfAbsent(flowFiber.id) { FlowMedicalHistory() }
 
             val report = consultStaff(flowFiber, currentState, errors, medicalHistory)
 
             val (outcome, event, backOffForChronicCondition) = when (report.diagnosis) {
+                Diagnosis.RESUSCITATE -> {
+                    // reschedule the last outcome as it failed to process it
+                    // do a 0.seconds backoff in dev mode? / when coming from the driver? make it configurable?
+                    val outcome = medicalHistory.records.last().outcome
+                    val backOff = calculateBackOffForResuscitation(medicalHistory, currentState, outcome)
+                    log.info("Flow error to be resuscitated, rescheduling previous outcome - $outcome (delay ${backOff.seconds}s) by ${report.by} (error was ${report.error.message})")
+                    onFlowResuscitated.forEach { hook -> hook.invoke(flowFiber.id, report.by.map { it.toString() }, outcome) }
+                    Triple(outcome, outcome.event, backOff)
+                }
                 Diagnosis.DISCHARGE -> {
                     val backOff = calculateBackOffForChronicCondition(report, medicalHistory, currentState)
                     log.info("Flow error discharged from hospital (delay ${backOff.seconds}s) by ${report.by} (error was ${report.error.message})")
@@ -254,30 +248,20 @@ class StaffedFlowHospital(private val flowMessaging: FlowMessaging,
                     onFlowErrorPropagated.forEach { hook -> hook.invoke(flowFiber.id, report.by.map { it.toString() }) }
                     Triple(Outcome.UNTREATABLE, Event.StartErrorPropagation, 0.seconds)
                 }
-                Diagnosis.RESUSCITATE -> {
-                    // reschedule the last outcome as it failed to process it
-                    // do a 0.seconds backoff in dev mode? / when coming from the driver? make it configurable?
-                    val backOff = calculateBackOffForResuscitation(medicalHistory, currentState)
-                    val outcome = medicalHistory.records.last().outcome
-                    log.info("Flow error to be resuscitated, rescheduling previous outcome - $outcome (delay ${backOff.seconds}s) by ${report.by} (error was ${report.error.message})")
-                    onFlowResuscitated.forEach { hook -> hook.invoke(flowFiber.id, report.by.map { it.toString() }, outcome) }
-                    Triple(outcome, outcome.event, backOff)
-                }
             }
 
-            val numberOfSuspends = currentState.checkpoint.checkpointState.numberOfSuspends
-            val record = MedicalRecord.Flow(time, flowFiber.id, numberOfSuspends, errors, report.by, outcome)
+            val record = MedicalRecord.Flow(
+                time,
+                flowFiber.id,
+                currentState.checkpoint.checkpointState.numberOfSuspends,
+                errors,
+                report.by,
+                outcome,
+                report.diagnosis == Diagnosis.RESUSCITATE
+            )
             medicalHistory.records += record
             recordsPublisher.onNext(record)
             Pair(event, backOffForChronicCondition)
-        }
-
-        if (backOffForChronicCondition.isZero) {
-            flowFiber.scheduleEvent(event)
-        } else {
-            hospitalJobTimer.schedule(timerTask {
-                flowFiber.scheduleEvent(event)
-            }, backOffForChronicCondition.toMillis())
         }
     }
 
@@ -293,8 +277,9 @@ class StaffedFlowHospital(private val flowMessaging: FlowMessaging,
 
     private fun calculateBackOffForResuscitation(
         medicalHistory: FlowMedicalHistory,
-        currentState: StateMachineState
-    ): Duration = calculateBackOff(medicalHistory.timesResuscitated(currentState))
+        currentState: StateMachineState,
+        outcome: Outcome
+    ): Duration = calculateBackOff(medicalHistory.timesResuscitatedForTheSameOutcome(currentState, outcome))
 
     private fun calculateBackOff(timesDiagnosisGiven: Int): Duration {
         return if (timesDiagnosisGiven == 0) {
@@ -313,7 +298,15 @@ class StaffedFlowHospital(private val flowMessaging: FlowMessaging,
                 .mapIndexed { index, error ->
                     // Rely on the logging context to print details of the flow ID.
                     log.info("Error ${index + 1} of ${errors.size}:", error)
-                    val diagnoses: Map<Diagnosis, List<Staff>> = staff.groupBy { it.consult(flowFiber, currentState, error, medicalHistory) }
+                    val diagnoses: Map<Diagnosis, List<Staff>> =
+                        staff.run {
+                            if (isEmpty()) {
+                                log.info("Staff flow hospital has no staff members.")
+                                EMPTY_DIAGNOSES
+                            } else {
+                                this.groupBy { it.consult(flowFiber, currentState, error, medicalHistory) }
+                            }
+                        }
                     // We're only interested in the highest priority diagnosis for the error
                     val (diagnosis, by) = diagnoses.entries.minBy { it.key }!!
                     ConsultationReport(error, diagnosis, by)
@@ -353,26 +346,6 @@ class StaffedFlowHospital(private val flowMessaging: FlowMessaging,
         hospitalJobTimer.cancel()
     }
 
-    class FlowMedicalHistory {
-        internal val records: MutableList<MedicalRecord.Flow> = mutableListOf()
-
-        fun notDischargedForTheSameThingMoreThan(max: Int, by: Staff, currentState: StateMachineState): Boolean {
-            return timesDischargedForTheSameThing(by, currentState) <= max
-        }
-
-        fun timesDischargedForTheSameThing(by: Staff, currentState: StateMachineState): Int {
-            val lastAdmittanceSuspendCount = currentState.checkpoint.checkpointState.numberOfSuspends
-            return records.count { it.outcome == Outcome.DISCHARGE && by in it.by && it.suspendCount == lastAdmittanceSuspendCount }
-        }
-
-        fun timesResuscitated(currentState: StateMachineState): Int {
-            val lastAdmittanceSuspendCount = currentState.checkpoint.checkpointState.numberOfSuspends
-            return records.count { ResuscitationSpecialist in it.by && it.suspendCount == lastAdmittanceSuspendCount }
-        }
-
-        override fun toString(): String = "${this.javaClass.simpleName}(records = $records)"
-    }
-
     private data class InternalSessionInitRecord(val sessionMessage: InitialSessionMessage,
                                                  val event: ExternalEvent.ExternalMessageEvent,
                                                  val publicRecord: MedicalRecord.SessionInit)
@@ -388,7 +361,8 @@ class StaffedFlowHospital(private val flowMessaging: FlowMessaging,
                         val suspendCount: Int,
                         override val errors: List<Throwable>,
                         val by: List<Staff>,
-                        override val outcome: Outcome) : MedicalRecord()
+                        override val outcome: Outcome,
+                        val resuscitated: Boolean = false) : MedicalRecord()
 
         /** Medical record for a session initiation that was unsuccessful. */
         data class SessionInit(val id: StateMachineRunId,
@@ -408,277 +382,57 @@ class StaffedFlowHospital(private val flowMessaging: FlowMessaging,
         OVERNIGHT_OBSERVATION(Event.OvernightObservation),
         UNTREATABLE(Event.StartErrorPropagation)
     }
-
-    /** The order of the enum values are in priority order. */
-    enum class Diagnosis {
-        /** Retry the last outcome/diagnosis **/
-        RESUSCITATE,
-        /** The flow should not see other staff members */
-        TERMINAL,
-        /** Retry from last safe point. */
-        DISCHARGE,
-        /** Park and await intervention. */
-        OVERNIGHT_OBSERVATION,
-        /** Please try another member of staff. */
-        NOT_MY_SPECIALTY
-    }
-
-    interface Staff {
-        fun consult(flowFiber: FlowFiber, currentState: StateMachineState, newError: Throwable, history: FlowMedicalHistory): Diagnosis
-    }
-
-    /**
-     * The [Chronic] interface relates to [Staff] that return diagnoses that can be constantly be diagnosed if the flow keeps returning to
-     * the hospital. [Chronic] diagnoses apply a backoff before scheduling a new [Event], this prevents a flow from constantly retrying
-     * without a chance for the underlying issue to resolve itself.
-     */
-    interface Chronic
-
-    /**
-     * SQL Deadlock detection.
-     */
-    object DeadlockNurse : Staff, Chronic {
-        override fun consult(flowFiber: FlowFiber, currentState: StateMachineState, newError: Throwable, history: FlowMedicalHistory): Diagnosis {
-            return if (mentionsDeadlock(newError)) {
-                Diagnosis.DISCHARGE
-            } else {
-                Diagnosis.NOT_MY_SPECIALTY
-            }
-        }
-
-        private fun mentionsDeadlock(exception: Throwable?): Boolean {
-            return exception.mentionsThrowable(SQLException::class.java, "deadlock")
-        }
-    }
-
-    /**
-     * Primary key violation detection for duplicate inserts.  Will detect other constraint violations too.
-     */
-    object DuplicateInsertSpecialist : Staff {
-        override fun consult(flowFiber: FlowFiber, currentState: StateMachineState, newError: Throwable, history: FlowMedicalHistory): Diagnosis {
-            return if (newError.mentionsThrowable(ConstraintViolationException::class.java)
-                && history.notDischargedForTheSameThingMoreThan(2, this, currentState)) {
-                Diagnosis.DISCHARGE
-            } else {
-                Diagnosis.NOT_MY_SPECIALTY
-            }
-        }
-    }
-
-    /**
-     * Restarts [TimedFlow], keeping track of the number of retries and making sure it does not
-     * exceed the limit specified by the [FlowTimeoutException].
-     */
-    object DoctorTimeout : Staff {
-        override fun consult(flowFiber: FlowFiber, currentState: StateMachineState, newError: Throwable, history: FlowMedicalHistory): Diagnosis {
-            if (newError is FlowTimeoutException) {
-                return Diagnosis.DISCHARGE
-            }
-            return Diagnosis.NOT_MY_SPECIALTY
-        }
-    }
-
-    object FinalityDoctor : Staff {
-        override fun consult(flowFiber: FlowFiber, currentState: StateMachineState, newError: Throwable, history: FlowMedicalHistory): Diagnosis {
-            return if (currentState.flowLogic is FinalityHandler) {
-                log.warn("Flow ${flowFiber.id} failed to be finalised. Manual intervention may be required before retrying " +
-                        "the flow by re-starting the node. State machine state: $currentState", newError)
-                Diagnosis.OVERNIGHT_OBSERVATION
-            } else if (isFromReceiveFinalityFlow(newError)) {
-                if (isErrorPropagatedFromCounterparty(newError) && isErrorThrownDuringReceiveFinality(newError)) {
-                    // no need to keep around the flow, since notarisation has already failed at the counterparty.
-                    Diagnosis.NOT_MY_SPECIALTY
-                } else {
-                    log.warn("Flow ${flowFiber.id} failed to be finalised. Manual intervention may be required before retrying " +
-                            "the flow by re-starting the node. State machine state: $currentState", newError)
-                    Diagnosis.OVERNIGHT_OBSERVATION
-                }
-            } else {
-                Diagnosis.NOT_MY_SPECIALTY
-            }
-        }
-
-        private fun isFromReceiveFinalityFlow(throwable: Throwable): Boolean {
-            return throwable.stackTrace.any { it.className == ReceiveFinalityFlow::class.java.name }
-        }
-
-        private fun isErrorPropagatedFromCounterparty(error: Throwable): Boolean {
-            return when (error) {
-                is UnexpectedFlowEndException -> {
-                    val peer = DeclaredField<Party?>(UnexpectedFlowEndException::class.java, "peer", error).value
-                    peer != null
-                }
-                is FlowException -> {
-                    val peer = DeclaredField<Party?>(FlowException::class.java, "peer", error).value
-                    peer != null
-                }
-                else -> false
-            }
-        }
-
-        /**
-         * This method will return true if [ReceiveTransactionFlow] is at the top of the stack during the error.
-         * As a result, if the failure happened during a sub-flow invoked from [ReceiveTransactionFlow], the method will return false.
-         *
-         * This is because in the latter case, the transaction might have already been finalised and deleting the flow
-         * would introduce risk for inconsistency between nodes.
-         */
-        private fun isErrorThrownDuringReceiveFinality(error: Throwable): Boolean {
-            val strippedStacktrace = error.stackTrace
-                    .filterNot { it?.className?.contains("counter-flow exception from peer") ?: false }
-                    .filterNot { it?.className?.startsWith("net.corda.node.services.statemachine.") ?: false }
-            return strippedStacktrace.isNotEmpty()
-                    && strippedStacktrace.first().className.startsWith(ReceiveTransactionFlow::class.qualifiedName!!)
-        }
-    }
-
-    /**
-     * [SQLTransientConnectionException] detection that arise from failing to connect the underlying database/datasource
-     */
-    object TransientConnectionCardiologist : Staff {
-        override fun consult(
-                flowFiber: FlowFiber,
-                currentState: StateMachineState,
-                newError: Throwable,
-                history: FlowMedicalHistory
-        ): Diagnosis {
-            return if (mentionsTransientConnection(newError)) {
-                if (history.notDischargedForTheSameThingMoreThan(2, this, currentState)) {
-                    Diagnosis.DISCHARGE
-                } else {
-                    Diagnosis.OVERNIGHT_OBSERVATION
-                }
-            } else {
-                Diagnosis.NOT_MY_SPECIALTY
-            }
-        }
-
-        private fun mentionsTransientConnection(exception: Throwable?): Boolean {
-            return exception.mentionsThrowable(SQLTransientConnectionException::class.java, "connection is not available")
-        }
-    }
-
-    /**
-     * Hospitalise any database (SQL and Persistence) exception that wasn't handled otherwise, unless on the configurable whitelist
-     * Note that retry decisions from other specialists will not be affected as retries take precedence over hospitalisation.
-     */
-    object DatabaseEndocrinologist : Staff {
-        override fun consult(
-                flowFiber: FlowFiber,
-                currentState: StateMachineState,
-                newError: Throwable,
-                history: FlowMedicalHistory
-        ): Diagnosis {
-            return if ((newError is SQLException || newError is PersistenceException) && !customConditions.any { it(newError) }) {
-                Diagnosis.OVERNIGHT_OBSERVATION
-            } else {
-                Diagnosis.NOT_MY_SPECIALTY
-            }
-        }
-
-        @VisibleForTesting
-        val customConditions = mutableSetOf<(t: Throwable) -> Boolean>()
-    }
-
-    /**
-     * Handles exceptions from internal state transitions that are not dealt with by the rest of the staff.
-     *
-     * [InterruptedException]s are diagnosed as [Diagnosis.TERMINAL] so they are never retried
-     * (can occur when a flow is killed - `killFlow`).
-     * [AsyncOperationTransitionException]s ares ignored as the error is likely to have originated in user async code rather than inside
-     * of a transition.
-     * All other exceptions are retried a maximum of 3 times before being kept in for observation.
-     */
-    object TransitionErrorGeneralPractitioner : Staff {
-        override fun consult(
-            flowFiber: FlowFiber,
-            currentState: StateMachineState,
-            newError: Throwable,
-            history: FlowMedicalHistory
-        ): Diagnosis {
-            return if (newError.mentionsThrowable(StateTransitionException::class.java)) {
-                when {
-                    newError.mentionsThrowable(InterruptedException::class.java) -> Diagnosis.TERMINAL
-                    newError.mentionsThrowable(ReloadFlowFromCheckpointException::class.java) -> Diagnosis.OVERNIGHT_OBSERVATION
-                    newError.mentionsThrowable(AsyncOperationTransitionException::class.java) -> Diagnosis.NOT_MY_SPECIALTY
-                    history.notDischargedForTheSameThingMoreThan(2, this, currentState) -> Diagnosis.DISCHARGE
-                    else -> Diagnosis.OVERNIGHT_OBSERVATION
-                }.also { logDiagnosis(it, newError, flowFiber, history) }
-            } else {
-                Diagnosis.NOT_MY_SPECIALTY
-            }
-        }
-
-        private fun logDiagnosis(diagnosis: Diagnosis, newError: Throwable, flowFiber: FlowFiber, history: FlowMedicalHistory) {
-            if (diagnosis != Diagnosis.NOT_MY_SPECIALTY) {
-                log.debug {
-                    """
-                        Flow ${flowFiber.id} given $diagnosis diagnosis due to a transition error
-                        - Exception: ${newError.message}
-                        - History: $history
-                        ${(newError as? StateTransitionException)?.transitionAction?.let { "- Action: $it" }}
-                        ${(newError as? StateTransitionException)?.transitionEvent?.let { "- Event: $it" }}
-                        """.trimIndent()
-                }
-            }
-        }
-    }
-
-    /**
-     * Keeps the flow in for overnight observation if [HospitalizeFlowException] is received.
-     */
-    object SedationNurse : Staff {
-        override fun consult(
-            flowFiber: FlowFiber,
-            currentState: StateMachineState,
-            newError: Throwable,
-            history: FlowMedicalHistory
-        ): Diagnosis {
-            return if (newError.mentionsThrowable(HospitalizeFlowException::class.java)) {
-                Diagnosis.OVERNIGHT_OBSERVATION
-            } else {
-                Diagnosis.NOT_MY_SPECIALTY
-            }
-        }
-    }
-
-    /**
-     * Retry notarisation if the flow errors with a [NotaryError.General]. Notary flows are idempotent and only success or conflict
-     * responses should be returned to the client.
-     */
-    object NotaryDoctor : Staff, Chronic {
-        override fun consult(flowFiber: FlowFiber,
-                             currentState: StateMachineState,
-                             newError: Throwable,
-                             history: FlowMedicalHistory): Diagnosis {
-            if (newError is NotaryException && newError.error is NotaryError.General) {
-                return Diagnosis.DISCHARGE
-            }
-            return Diagnosis.NOT_MY_SPECIALTY
-        }
-    }
-
-    /**
-     * Handles errors coming from the processing of errors events ([Event.StartErrorPropagation] and [Event.RetryFlowFromSafePoint]),
-     * returning a [Diagnosis.RESUSCITATE] diagnosis
-     */
-    object ResuscitationSpecialist : Staff {
-        override fun consult(
-            flowFiber: FlowFiber,
-            currentState: StateMachineState,
-            newError: Throwable,
-            history: FlowMedicalHistory
-        ): Diagnosis {
-            return if (newError is ErrorStateTransitionException) {
-                Diagnosis.RESUSCITATE
-            } else {
-                Diagnosis.NOT_MY_SPECIALTY
-            }
-        }
-    }
 }
 
-private fun <T : Throwable> Throwable?.mentionsThrowable(exceptionType: Class<T>, errorMessage: String? = null): Boolean {
+// The below classes, interfaces ,helper method should be moved under :core to be available for Cordapp developers
+// to define their own staff members if they wanted to
+class FlowMedicalHistory {
+    internal val records: MutableList<StaffedFlowHospital.MedicalRecord.Flow> = mutableListOf()
+
+    fun notDischargedForTheSameThingMoreThan(max: Int, by: Staff, currentState: StateMachineState): Boolean {
+        return timesDischargedForTheSameThing(by, currentState) <= max
+    }
+
+    fun timesDischargedForTheSameThing(by: Staff, currentState: StateMachineState): Int {
+        val lastAdmittanceSuspendCount = currentState.checkpoint.checkpointState.numberOfSuspends
+        return records.count { it.outcome == StaffedFlowHospital.Outcome.DISCHARGE && by in it.by && it.suspendCount == lastAdmittanceSuspendCount }
+    }
+
+    fun timesResuscitatedForTheSameOutcome(currentState: StateMachineState, outcome: StaffedFlowHospital.Outcome): Int {
+        val lastAdmittanceSuspendCount = currentState.checkpoint.checkpointState.numberOfSuspends
+        return records.count { it.resuscitated && it.outcome == outcome && it.suspendCount == lastAdmittanceSuspendCount }
+    }
+
+    override fun toString(): String = "${this.javaClass.simpleName}(records = $records)"
+}
+
+/** The order of the enum values are in priority order. */
+enum class Diagnosis {
+    /** Retry the last outcome/diagnosis **/
+    RESUSCITATE,
+    /** The flow should not see other staff members */
+    TERMINAL,
+    /** Retry from last safe point. */
+    DISCHARGE,
+    /** Park and await intervention. */
+    OVERNIGHT_OBSERVATION,
+    /** Please try another member of staff. */
+    NOT_MY_SPECIALTY
+}
+
+// Since Flow hospital stays in :node, then everything that staff members need, need to move under :core.
+interface Staff {
+    fun consult(flowFiber: FlowFiber, currentState: StateMachineState, newError: Throwable, history: FlowMedicalHistory): Diagnosis
+}
+
+/**
+ * The [Chronic] interface relates to [Staff] that return diagnoses that can be constantly be diagnosed if the flow keeps returning to
+ * the hospital. [Chronic] diagnoses apply a backoff before scheduling a new [Event], this prevents a flow from constantly retrying
+ * without a chance for the underlying issue to resolve itself.
+ */
+interface Chronic
+
+fun <T : Throwable> Throwable?.mentionsThrowable(exceptionType: Class<T>, errorMessage: String? = null): Boolean {
     if (this == null) {
         return false
     }
@@ -689,4 +443,3 @@ private fun <T : Throwable> Throwable?.mentionsThrowable(exceptionType: Class<T>
     }
     return (exceptionType.isAssignableFrom(this::class.java) && containsMessage) || cause.mentionsThrowable(exceptionType, errorMessage)
 }
-
