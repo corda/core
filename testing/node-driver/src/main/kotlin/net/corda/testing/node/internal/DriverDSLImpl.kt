@@ -2,6 +2,7 @@
 
 package net.corda.testing.node.internal
 
+import net.corda.nodeapi.internal.config.User as InternalUser
 import co.paralleluniverse.fibers.instrument.JavaAgent
 import com.google.common.util.concurrent.ThreadFactoryBuilder
 import com.typesafe.config.Config
@@ -9,6 +10,31 @@ import com.typesafe.config.ConfigFactory
 import com.typesafe.config.ConfigRenderOptions
 import com.typesafe.config.ConfigValue
 import com.typesafe.config.ConfigValueFactory
+import java.net.ConnectException
+import java.net.URL
+import java.net.URLClassLoader
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.Paths
+import java.security.cert.X509Certificate
+import java.time.Duration
+import java.time.Instant
+import java.time.ZoneOffset.UTC
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
+import java.util.Collections.unmodifiableList
+import java.util.Comparator
+import java.util.Random
+import java.util.UUID
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.jar.JarInputStream
+import java.util.jar.Manifest
+import java.util.stream.Stream
+import kotlin.concurrent.thread
 import net.corda.client.rpc.CordaRPCClient
 import net.corda.client.rpc.RPCException
 import net.corda.cliutils.CommonCliConstants.BASE_DIR
@@ -106,32 +132,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import rx.Subscription
 import rx.schedulers.Schedulers
-import java.net.ConnectException
-import java.net.URL
-import java.net.URLClassLoader
-import java.nio.file.Files
-import java.nio.file.Path
-import java.nio.file.Paths
-import java.security.cert.X509Certificate
-import java.time.Duration
-import java.time.Instant
-import java.time.ZoneOffset.UTC
-import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
-import java.util.*
-import java.util.Collections.unmodifiableList
-import java.util.concurrent.Executors
-import java.util.concurrent.ScheduledExecutorService
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.TimeoutException
-import java.util.concurrent.atomic.AtomicInteger
-import java.util.jar.JarInputStream
-import java.util.jar.Manifest
-import kotlin.collections.ArrayList
-import kotlin.collections.HashMap
-import kotlin.collections.HashSet
-import kotlin.concurrent.thread
-import net.corda.nodeapi.internal.config.User as InternalUser
 
 class DriverDSLImpl(
         val portAllocation: PortAllocation,
@@ -274,18 +274,6 @@ class DriverDSLImpl(
         val name = parameters.providedName ?: CordaX500Name("${oneOf(names).organisation}-${p2pAddress.port}", "London", "GB")
 
         val config = createConfig(name, parameters, p2pAddress)
-        if (isH2Database(config) && !inMemoryDB) {
-            if (premigrateH2Database) {
-                try {
-                    DatabaseSnapshot.copyDatabaseSnapshot(config.corda.baseDirectory)
-                } catch (ex: java.nio.file.FileAlreadyExistsException) {
-                    log.warn("Database already exists on disk, not attempting to pre-migrate database.")
-                }
-            }
-            shutdownManager.registerShutdown {
-                shutdownAndDeleteDatabase(config.corda)
-            }
-        }
         val registrationFuture = if (compatibilityZone?.rootCert != null) {
             // We don't need the network map to be available to be able to register the node
             createSchema(config, false).flatMap { startNodeRegistration(it, compatibilityZone.rootCert, compatibilityZone.config()) }
@@ -695,7 +683,7 @@ class DriverDSLImpl(
         }
     }
 
-    @Suppress("ComplexMethod")
+    @Suppress("LongMethod", "ComplexMethod")
     private fun startNodeInternal(config: NodeConfig,
                                   webAddress: NetworkHostAndPort,
                                   localNetworkMap: LocalNetworkMap?,
@@ -706,6 +694,34 @@ class DriverDSLImpl(
         val identifier = ZonedDateTime.now().format(DateTimeFormatter.ofPattern("HHmmss.SSS"))
         localNetworkMap?.networkParametersCopier?.install(baseDirectory)
         localNetworkMap?.nodeInfosCopier?.addConfig(baseDirectory)
+        shutdownManager.registerShutdown {
+            if (System.getProperty("${DriverDSL::class.qualifiedName}.wipeArtemisJournal")?.toBoolean() != false) {
+                Stream.of("artemis", "brokers")
+                        .map(baseDirectory::resolve)
+                        .filter { Files.exists(it) }
+                        .flatMap { Files.walk(it).sorted(Comparator.reverseOrder()) }
+                        .forEach(Files::delete)
+            }
+        }
+        if (isH2Database(config) && !inMemoryDB) {
+            if (premigrateH2Database) {
+                try {
+                    DatabaseSnapshot.copyDatabaseSnapshot(config.corda.baseDirectory)
+                } catch (ex: java.nio.file.FileAlreadyExistsException) {
+                    log.warn("Database already exists on disk, not attempting to pre-migrate database.")
+                }
+            }
+            shutdownManager.registerShutdown {
+                DataSourceFactory.createDataSource(config.corda.dataSourceProperties).also { dataSource ->
+                    dataSource.connection.use { connection ->
+                        connection.createStatement().use { statement ->
+                            statement.execute("SHUTDOWN")
+                        }
+                    }
+                }
+                DatabaseSnapshot.databaseFilename(config.corda.baseDirectory).deleteIfExists()
+            }
+        }
 
         val onNodeExit: () -> Unit = {
             localNetworkMap?.nodeInfosCopier?.removeConfig(baseDirectory)
@@ -1146,17 +1162,6 @@ class DriverDSLImpl(
          */
         private fun Map<String, Any>.removeResolvedClasspath(): Map<String, Any> {
             return filterNot { it.key == "java.class.path" }
-        }
-
-        private fun shutdownAndDeleteDatabase(config: NodeConfiguration) {
-            DataSourceFactory.createDataSource(config.dataSourceProperties).also { dataSource ->
-                dataSource.connection.use { connection ->
-                    connection.createStatement().use { statement ->
-                        statement.execute("SHUTDOWN")
-                    }
-                }
-            }
-            DatabaseSnapshot.databaseFilename(config.baseDirectory).deleteIfExists()
         }
     }
 }

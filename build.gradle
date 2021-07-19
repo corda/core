@@ -369,6 +369,7 @@ allprojects {
     tasks.withType(Test).configureEach {
         if (name.contains("integrationTest")) {
             maxParallelForks = (System.env.CORDA_INT_TESTING_FORKS == null) ? 1 : "$System.env.CORDA_INT_TESTING_FORKS".toInteger()
+            systemProperty "net.corda.testing.driver.DriverDSL.wipeArtemisJournal", project.property("integrationTest.wipeArtemisJournal")
         }
     }
 
