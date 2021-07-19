@@ -420,7 +420,7 @@ allprojects {
                 }
             }
             maven {
-                url 'https://repo.gradle.org/gradle/libs-releases'
+                url 'https://repo.gradle.org/artifactory/libs-releases'
                 content {
                     includeGroup 'org.gradle'
                     includeGroup 'com.github.detro'
