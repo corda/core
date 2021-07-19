@@ -7,6 +7,7 @@ import net.corda.core.utilities.getOrThrow
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import rx.Observable
+import rx.Subscription
 
 /**
  * This file defines a simple DSL for testing non-deterministic sequence of events arriving on an [Observable].
@@ -102,12 +103,15 @@ inline fun <E> replicate(number: Int, expectation: (Int) -> ExpectCompose<E>): E
  * @param isStrict If false non-matched events are disregarded (so the DSL will only check a subsequence of events).
  * @param expectCompose The DSL we expect to match against the stream of events.
  */
-fun <E : Any> Observable<E>.expectEvents(isStrict: Boolean = true, expectCompose: () -> ExpectCompose<E>) =
+fun <E : Any> Observable<E>.expectEvents(isStrict: Boolean = true, expectCompose: () -> ExpectCompose<E>) {
+    var subscription: Subscription? = null
+
+    try {
         serialize().genericExpectEvents(
                 isStrict = isStrict,
                 stream = { action: (E) -> Unit ->
                     val lock = object {}
-                    subscribe { event ->
+                    subscription = subscribe { event ->
                         synchronized(lock) {
                             action(event)
                         }
@@ -115,6 +119,10 @@ fun <E : Any> Observable<E>.expectEvents(isStrict: Boolean = true, expectCompose
                 },
                 expectCompose = expectCompose
         )
+    } finally {
+        subscription?.unsubscribe()
+    }
+}
 
 /**
  * Run the specified DSL against the event [Iterable].
@@ -179,7 +187,7 @@ fun <S, E : Any> S.genericExpectEvents(
             // Now run the matching piece of dsl
             try {
                 expectClosure()
-            } catch (exception: Exception) {
+            } catch (exception: Throwable) {
                 finishFuture.setException(exception)
             }
             if (state is ExpectComposeState.Finished) {
